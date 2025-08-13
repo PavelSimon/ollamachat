@@ -1,6 +1,10 @@
 import pytest
 import tempfile
 import os
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import app
 from models import db, User, Chat, Message, UserSettings
 from database_operations import UserOperations, ChatOperations, MessageOperations, SettingsOperations

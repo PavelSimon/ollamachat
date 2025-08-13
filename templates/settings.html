@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Nastavenia - OLLAMA Chat{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="settings-container">
+        <div class="settings-header">
+            <h2>Nastavenia</h2>
+            <a href="{{ url_for('main.chat') }}" class="btn btn-outline">← Späť na chat</a>
+        </div>
+        
+        <div class="settings-section">
+            <h3>OLLAMA Server</h3>
+            <p class="settings-description">
+                Konfigurácia pripojenia k OLLAMA serveru. Zmena nastavení sa prejaví pri ďalšom načítaní modelov.
+            </p>
+            
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="form-group">
+                    {{ form.ollama_host.label(class="form-label") }}
+                    {{ form.ollama_host(class="form-control", placeholder="http://192.168.1.23:11434") }}
+                    {% if form.ollama_host.description %}
+                        <small class="form-text">{{ form.ollama_host.description }}</small>
+                    {% endif %}
+                    {% if form.ollama_host.errors %}
+                        <ul class="error-list">
+                            {% for error in form.ollama_host.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    {{ form.submit(class="btn btn-primary") }}
+                    <a href="{{ url_for('main.chat') }}" class="btn btn-secondary">Zrušiť</a>
+                </div>
+            </form>
+        </div>
+        
+        <div class="settings-section">
+            <h3>Informácie o pripojení</h3>
+            <div class="connection-info">
+                <p><strong>Aktuálny server:</strong> <span id="current-server">{{ current_host }}</span></p>
+                <p><strong>Stav pripojenia:</strong> 
+                    <span id="connection-status" class="status-unknown">Testuje sa...</span>
+                </p>
+                <button type="button" id="test-connection" class="btn btn-outline">Otestovať pripojenie</button>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <h3>Dostupné modely</h3>
+            <div id="models-list" class="models-container">
+                <p>Načítavajú sa modely...</p>
+            </div>
+            <button type="button" id="refresh-models" class="btn btn-outline">Obnoviť modely</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-header h2 {
+    margin: 0;
+}
+
+.settings-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+}
+
+.settings-description {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.form-text {
+    color: #666;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    margin-left: 10px;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid #007bff;
+    color: #007bff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+}
+
+.connection-info {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.status-unknown {
+    color: #6c757d;
+}
+
+.status-connected {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.status-disconnected {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.models-container {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    min-height: 100px;
+}
+
+.model-item {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.model-item:last-child {
+    border-bottom: none;
+}
+
+.model-name {
+    font-weight: 500;
+}
+
+.model-size {
+    color: #666;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .settings-container {
+        margin: 20px;
+        padding: 20px;
+    }
+    
+    .settings-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .btn-secondary {
+        margin-left: 0;
+        margin-top: 10px;
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Test connection on page load
+    testConnection();
+    
+    // Load models on page load
+    loadModels();
+    
+    // Test connection button
+    document.getElementById('test-connection').addEventListener('click', testConnection);
+    
+    // Refresh models button
+    document.getElementById('refresh-models').addEventListener('click', loadModels);
+});
+
+function testConnection() {
+    const statusElement = document.getElementById('connection-status');
+    const testButton = document.getElementById('test-connection');
+    
+    statusElement.textContent = 'Testuje sa...';
+    statusElement.className = 'status-unknown';
+    testButton.disabled = true;
+    
+    fetch('/api/test-connection')
+        .then(response => response.json())
+        .then(data => {
+            if (data.connected) {
+                statusElement.textContent = 'Pripojené';
+                statusElement.className = 'status-connected';
+            } else {
+                statusElement.textContent = 'Nepripojené - ' + (data.error || 'Neznáma chyba');
+                statusElement.className = 'status-disconnected';
+            }
+        })
+        .catch(error => {
+            statusElement.textContent = 'Chyba testovania';
+            statusElement.className = 'status-disconnected';
+        })
+        .finally(() => {
+            testButton.disabled = false;
+        });
+}
+
+function loadModels() {
+    const modelsContainer = document.getElementById('models-list');
+    const refreshButton = document.getElementById('refresh-models');
+    
+    modelsContainer.innerHTML = '<p>Načítavajú sa modely...</p>';
+    refreshButton.disabled = true;
+    
+    fetch('/api/models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.models && data.models.length > 0) {
+                let html = '';
+                data.models.forEach(model => {
+                    const sizeGB = (model.size / (1024 * 1024 * 1024)).toFixed(2);
+                    html += `
+                        <div class="model-item">
+                            <div>
+                                <div class="model-name">${model.name}</div>
+                                <div class="model-size">${sizeGB} GB</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                modelsContainer.innerHTML = html;
+            } else {
+                modelsContainer.innerHTML = '<p>Žiadne modely nie sú dostupné. Skontrolujte pripojenie k serveru.</p>';
+            }
+        })
+        .catch(error => {
+            modelsContainer.innerHTML = '<p>Chyba pri načítavaní modelov. Skontrolujte pripojenie k serveru.</p>';
+        })
+        .finally(() => {
+            refreshButton.disabled = false;
+        });
+}
+</script>
+{% endblock %}

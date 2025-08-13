@@ -1,6 +1,7 @@
 # OLLAMA Chat
 
 Jednoduchá webová aplikácia pre komunikáciu s lokálnym OLLAMA modelom.
+Vytvorené pomocou [kiro.dev](https://kiro.dev)
 
 ## Požiadavky
 
@@ -65,3 +66,29 @@ uv sync --dev
 # Spustenie testov
 uv run pytest
 ```
+
+## Production Deployment
+
+Pre produkčné nasadenie si prečítajte [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Rýchle Docker spustenie
+
+```bash
+# Vytvorte .env súbor
+cp .env.example .env
+
+# Spustite s Docker Compose
+docker-compose up -d
+```
+
+## Funkcie
+
+- ✅ Používateľská autentifikácia (registrácia/prihlásenie)
+- ✅ Správa chatov (vytvorenie, mazanie, história)
+- ✅ Komunikácia s OLLAMA modelmi
+- ✅ Konfigurovateľný OLLAMA server
+- ✅ Responzívne webové rozhranie
+- ✅ Bezpečné ukladanie dát (SQLite)
+- ✅ Real-time chat rozhranie
+- ✅ Model selection (výber AI modelu)
+- ✅ Minimálny CSS a JavaScript
