@@ -72,36 +72,38 @@ limiter.limit("3 per minute")(app.view_functions['auth.register'])
 if 'settings.api_settings' in app.view_functions:
     limiter.limit("10 per minute")(app.view_functions['settings.api_settings'])
 
-# Error handlers
-@app.errorhandler(404)
-def not_found_error(error):
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Endpoint nenájdený'}), 404
-    return "Stránka nenájdená", 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    db.session.rollback()
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Interná chyba servera'}), 500
-    return "Interná chyba servera", 500
-
-@app.errorhandler(403)
-def forbidden_error(error):
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Prístup zamietnutý'}), 403
-    return "Prístup zamietnutý", 403
+# Register standardized error handlers
+from error_handlers import register_error_handlers, ErrorHandler
+register_error_handlers(app)
 
 @app.errorhandler(RateLimitExceeded)
 def ratelimit_handler(e):
     """Handle rate limit exceeded errors"""
     if request.path.startswith('/api/'):
-        return jsonify({
-            'error': 'Rate limit exceeded',
-            'message': f'Prekročený limit požiadaviek: {e.description}',
-            'retry_after': e.retry_after
-        }), 429
+        return ErrorHandler.rate_limit_error(
+            f'Prekročený limit požiadaviek: {e.description}'
+        )
     return f"Rate limit exceeded: {e.description}", 429
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    """Handle forbidden access errors"""
+    if request.path.startswith('/api/'):
+        return ErrorHandler.forbidden("Prístup zamietnutý")
+    return "Prístup zamietnutý", 403
+
+# Custom 500 handler with rollback
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle internal server errors with database rollback"""
+    db.session.rollback()
+    if request.path.startswith('/api/'):
+        return ErrorHandler.internal_error(
+            Exception("Internal server error"),
+            "Global error handler",
+            "Interná chyba servera"
+        )
+    return "Interná chyba servera", 500
 
 # Security headers
 @app.after_request

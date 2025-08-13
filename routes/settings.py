@@ -4,6 +4,7 @@ from marshmallow import ValidationError
 from forms import SettingsForm
 from database_operations import SettingsOperations
 from validation_schemas import SettingsUpdateSchema, validate_request_data, create_validation_error_response
+from error_handlers import ErrorHandler
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -41,7 +42,10 @@ def api_settings():
         try:
             data = request.get_json()
             if not data:
-                return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+                return ErrorHandler.validation_error(
+                    ValidationError("No data provided"),
+                    "Chýbajú dáta v požiadavke"
+                )
             
             validated_data = validate_request_data(SettingsUpdateSchema, data)
             
@@ -58,4 +62,8 @@ def api_settings():
         except ValidationError as e:
             return jsonify(create_validation_error_response(e)[0]), 400
         except Exception as e:
-            return jsonify({'error': f'Chyba pri ukladaní nastavení: {str(e)}'}), 500
+            return ErrorHandler.internal_error(
+                e,
+                "updating user settings",
+                "Chyba pri ukladaní nastavení"
+            )

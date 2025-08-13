@@ -153,3 +153,6 @@ docker-compose up -d
 - ✅ Comprehensive input validation pre všetky API endpointy
 - ✅ Databázové indexy pre optimalizovaný výkon
 - ✅ Rate limiting pre ochranu pred DoS útokmi
+- ✅ Centralizované error handling s konzistentným JSON formátom
+- ✅ Connection pooling pre OLLAMA klientov s automatickým cleanup
+- ✅ Response caching pre model listy s TTL (5 minút)

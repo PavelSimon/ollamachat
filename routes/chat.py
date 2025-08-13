@@ -2,11 +2,13 @@ from flask import Blueprint, jsonify, request, current_app as app
 from flask_login import login_required, current_user
 from marshmallow import ValidationError
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
-from ollama_client import OllamaClient, OllamaConnectionError
+from ollama_client import OllamaConnectionError
+from ollama_pool import get_pooled_client
 from validation_schemas import (
     ChatCreateSchema, ChatUpdateSchema, MessageCreateSchema,
     validate_request_data, create_validation_error_response
 )
+from error_handlers import ErrorHandler
 from rate_limiting import api_rate_limit, RateLimits
 
 chat_bp = Blueprint('chat', __name__)
@@ -17,9 +19,9 @@ def get_limiter():
     return get_limiter()
 
 def get_user_ollama_client(user_id):
-    """Get OLLAMA client configured for specific user"""
+    """Get pooled OLLAMA client configured for specific user"""
     user_settings = SettingsOperations.get_user_settings(user_id)
-    return OllamaClient(user_settings.ollama_host)
+    return get_pooled_client(user_settings.ollama_host)
 
 @chat_bp.route('/api/chats', methods=['GET', 'POST'])
 @login_required
@@ -57,8 +59,11 @@ def api_chats():
         except ValidationError as e:
             return jsonify(create_validation_error_response(e)[0]), 400
         except Exception as e:
-            app.logger.error(f"Error creating chat for user {current_user.id}: {str(e)}")
-            return jsonify({'error': f'Chyba pri vytváraní chatu: {str(e)}'}), 500
+            return ErrorHandler.internal_error(
+                e,
+                f"creating chat for user {current_user.id}",
+                "Chyba pri vytváraní chatu"
+            )
 
 @chat_bp.route('/api/chats/<int:chat_id>', methods=['GET', 'DELETE', 'PUT'])
 @login_required
@@ -68,7 +73,7 @@ def api_chat_detail(chat_id):
         # Get chat with messages
         chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
         if not chat:
-            return jsonify({'error': 'Chat nenájdený'}), 404
+            return ErrorHandler.not_found("Chat", "Chat nenájdený")
         
         messages = MessageOperations.get_chat_messages(chat_id, current_user.id)
         message_list = []
@@ -96,7 +101,7 @@ def api_chat_detail(chat_id):
         if success:
             return jsonify({'message': 'Chat bol úspešne zmazaný'})
         else:
-            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+            return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
     
     elif request.method == 'PUT':
         # Update chat (e.g., title)
@@ -115,7 +120,7 @@ def api_chat_detail(chat_id):
                     'created_at': chat.created_at.isoformat()
                 })
             else:
-                return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+                return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
         except ValidationError as e:
             return jsonify(create_validation_error_response(e)[0]), 400
 
@@ -137,7 +142,7 @@ def api_send_message():
         # Verify user owns the chat
         chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
         if not chat:
-            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+            return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
         # Save user message
         user_message = MessageOperations.add_message(
             chat_id=chat_id,

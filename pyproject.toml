@@ -14,6 +14,7 @@ dependencies = [
     "email-validator==2.2.0",
     "marshmallow>=3.19.0",
     "Flask-Limiter>=3.5.0",
+    "python-dotenv>=1.1.1",
 ]
 
 [tool.uv]
