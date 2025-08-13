@@ -78,6 +78,8 @@ uv run python tests/test_ollama_integration.py http://your-server:11434
 - **Unit testy** (`tests/test_ollama.py`): Testujú funkcionalitu s mock objektmi
 - **Integration testy** (`tests/test_ollama_integration.py`): Testujú skutočné pripojenie k OLLAMA serveru
 
+Detailnú dokumentáciu testov nájdete v [tests.md](tests.md).
+
 ## Production Deployment
 
 Pre produkčné nasadenie si prečítajte [DEPLOYMENT.md](DEPLOYMENT.md).
@@ -102,4 +104,6 @@ docker-compose up -d
 - ✅ Bezpečné ukladanie dát (SQLite)
 - ✅ Real-time chat rozhranie
 - ✅ Model selection (výber AI modelu)
-- ✅ Minimálny CSS a JavaScript
+- ✅ Organizovaný CSS a JavaScript (static/css/, static/js/)
+- ✅ Rozšírené timeout handling pre pomalé modely
+- ✅ Diagnostické nástroje a integration testy
