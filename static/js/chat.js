@@ -82,11 +82,52 @@ function loadModels() {
             } else {
                 modelSelect.innerHTML = '<option value="">Žiadne modely dostupné</option>';
             }
+
+            // Display OLLAMA version information
+            displayVersionInfo(data.version);
         })
         .catch(error => {
             console.error('Error loading models:', error);
             document.getElementById('model-select').innerHTML = '<option value="">Chyba pri načítavaní modelov</option>';
+            // Clear version info on error
+            displayVersionInfo(null);
         });
+}
+
+function displayVersionInfo(versionInfo) {
+    // Find or create version info container
+    let versionContainer = document.getElementById('ollama-version-info');
+    if (!versionContainer) {
+        // Create container in the chat header model selector section
+        const modelSelectorContainer = document.querySelector('.model-selector');
+        versionContainer = document.createElement('div');
+        versionContainer.id = 'ollama-version-info';
+        versionContainer.className = 'version-info';
+        modelSelectorContainer.appendChild(versionContainer);
+    }
+
+    if (versionInfo && versionInfo.version) {
+        let versionHtml = `<div class="version-title">OLLAMA Server</div>`;
+        versionHtml += `<div class="version-item"><strong>Verzia:</strong> ${versionInfo.version}</div>`;
+        
+        if (versionInfo.architecture && versionInfo.architecture !== 'unknown') {
+            versionHtml += `<div class="version-item"><strong>Architektúra:</strong> ${versionInfo.architecture}</div>`;
+        }
+        
+        if (versionInfo.llama_cpp_version && versionInfo.llama_cpp_version !== 'unknown') {
+            versionHtml += `<div class="version-item"><strong>LLaMA.cpp:</strong> ${versionInfo.llama_cpp_version}</div>`;
+        }
+        
+        if (versionInfo.cuda_version) {
+            versionHtml += `<div class="version-item"><strong>CUDA:</strong> ${versionInfo.cuda_version}</div>`;
+        }
+        
+        versionContainer.innerHTML = versionHtml;
+        versionContainer.style.display = 'block';
+    } else {
+        versionContainer.innerHTML = '';
+        versionContainer.style.display = 'none';
+    }
 }
 
 function createNewChat() {

@@ -156,3 +156,9 @@ docker-compose up -d
 - ✅ Centralizované error handling s konzistentným JSON formátom
 - ✅ Connection pooling pre OLLAMA klientov s automatickým cleanup
 - ✅ Response caching pre model listy s TTL (5 minút)
+- ✅ API versioning s `/api/v1/` namespace pre budúcu kompatibilitu
+- ✅ Strukturované JSON logovania s automatickou rotáciou súborov
+- ✅ Health check endpointy pre monitoring systému
+- ✅ Real-time OLLAMA server version display v užívateľskom rozhraní
+- ✅ Pokročilé request tracking s correlation IDs
+- ✅ Optimalizované UI s kompaktným layoutom (167px šírka)

@@ -60,9 +60,14 @@ def get_models():
         # Use cached function to get models
         models = _get_models_from_host(user_settings.ollama_host)
         
+        # Get version information
+        client = get_user_ollama_client(current_user.id)
+        version_info = client.get_version()
+        
         return jsonify({
             'models': models,
             'host': user_settings.ollama_host,
+            'version': version_info,
             'cached': True  # Indicate that response may be cached
         })
     except OllamaConnectionError as e:
@@ -75,6 +80,7 @@ def get_models():
         # Add compatibility fields
         error_response['models'] = []
         error_response['host'] = user_settings.ollama_host
+        error_response['version'] = None
         return error_response, status_code
     except Exception as e:
         error_response, status_code = ErrorHandler.internal_error(
@@ -85,6 +91,7 @@ def get_models():
         # Add compatibility fields
         error_response['models'] = []
         error_response['host'] = user_settings.ollama_host
+        error_response['version'] = None
         return error_response, status_code
 
 

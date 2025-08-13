@@ -46,13 +46,17 @@ def get_limiter():
 from routes.auth import auth_bp
 from routes.main import main_bp
 from routes.settings import settings_bp
-from routes.api import api_bp
 from routes.chat import chat_bp
+
+# Import legacy API and new v1 API
+from routes.api import api_bp  # Legacy API from routes/api.py
+from routes.api_versions.v1 import api_v1_bp  # New v1 API
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(main_bp)
 app.register_blueprint(settings_bp)
-app.register_blueprint(api_bp)
+app.register_blueprint(api_bp)  # Legacy API endpoints
+app.register_blueprint(api_v1_bp)  # New v1 API endpoints
 app.register_blueprint(chat_bp)
 
 # Apply rate limiting to specific endpoints after blueprint registration
@@ -60,9 +64,19 @@ app.register_blueprint(chat_bp)
 limiter.limit("10 per minute")(app.view_functions['chat.api_chats'])
 limiter.limit("20 per minute")(app.view_functions['chat.api_send_message'])
 
-# API endpoints  
+# Legacy API endpoints  
 limiter.limit("30 per minute")(app.view_functions['api.get_models'])
 limiter.limit("10 per minute")(app.view_functions['api.test_connection'])
+
+# API v1 endpoints (enhanced rate limits)
+if 'api_v1.get_models' in app.view_functions:
+    limiter.limit("50 per minute")(app.view_functions['api_v1.get_models'])
+if 'api_v1.test_ollama_connection' in app.view_functions:
+    limiter.limit("15 per minute")(app.view_functions['api_v1.test_ollama_connection'])
+if 'api_v1.get_chats' in app.view_functions:
+    limiter.limit("100 per minute")(app.view_functions['api_v1.get_chats'])
+if 'api_v1.create_chat' in app.view_functions:
+    limiter.limit("20 per minute")(app.view_functions['api_v1.create_chat'])
 
 # Auth endpoints (more restrictive)
 limiter.limit("5 per minute")(app.view_functions['auth.login'])
@@ -115,11 +129,9 @@ def add_security_headers(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
-# Setup logging
-if not app.debug:
-    logging.basicConfig(level=logging.INFO)
-    app.logger.setLevel(logging.INFO)
-    app.logger.info('OLLAMA Chat startup')
+# Setup enhanced logging
+from enhanced_logging import setup_enhanced_logging
+setup_enhanced_logging(app)
 
 def init_db():
     """Initialize database with tables"""

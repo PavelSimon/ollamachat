@@ -54,6 +54,28 @@ class OllamaClient:
             logger.error(f"Invalid JSON response: {e}")
             raise OllamaConnectionError("Neplatná odpoveď zo servera")
     
+    def get_version(self) -> Dict:
+        """Get OLLAMA server version information"""
+        try:
+            response = self.session.get(f"{self.base_url}/api/version", timeout=5)
+            response.raise_for_status()
+            
+            data = response.json()
+            return {
+                'version': data.get('version', 'unknown'),
+                'llama_cpp_version': data.get('details', {}).get('llama_cpp_version', 'unknown'),
+                'architecture': data.get('details', {}).get('architecture', 'unknown'),
+                'cuda_version': data.get('details', {}).get('cuda_version', None),
+                'git_commit': data.get('details', {}).get('git_commit', 'unknown')
+            }
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get version: {e}")
+            raise OllamaConnectionError(f"Nepodarilo sa získať verziu: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response: {e}")
+            raise OllamaConnectionError("Neplatná odpoveď zo servera")
+    
     def chat(self, model: str, messages: List[Dict], stream: bool = False) -> Dict:
         """Send chat request to OLLAMA model"""
         try:

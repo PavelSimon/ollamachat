@@ -20,5 +20,12 @@ instance/*
 .env
 .env.local
 
+# Log files
+logs/
+*.log
+
 #node files
 node_modules/
+
+#kolíčiky
+cookies.txt
