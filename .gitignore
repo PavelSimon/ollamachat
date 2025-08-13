@@ -19,3 +19,6 @@ instance/*
 # Environment variables
 .env
 .env.local
+
+#node files
+node_modules/
