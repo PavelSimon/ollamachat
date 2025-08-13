@@ -319,6 +319,15 @@ function sendMessage() {
     document.querySelector('.send-text').style.display = 'none';
     document.querySelector('.loading-text').style.display = 'inline';
 
+    // Add timeout warning after 30 seconds
+    const timeoutWarning = setTimeout(() => {
+        document.querySelector('.loading-text').textContent = 'Spracováva sa... (môže trvať dlhšie)';
+    }, 30000);
+
+    // Create AbortController for request cancellation
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout
+
     fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -328,9 +337,16 @@ function sendMessage() {
             chat_id: currentChatId,
             message: message,
             model: selectedModel
-        })
+        }),
+        signal: controller.signal
     })
-        .then(response => response.json())
+        .then(response => {
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.user_message && data.ai_message) {
                 // Clear input
@@ -342,19 +358,37 @@ function sendMessage() {
                 // Update chat list (title might have changed)
                 loadChats();
             } else {
-                alert('Chyba pri odosielaní správy: ' + (data.error || 'Neznáma chyba'));
+                console.error('Unexpected response format:', data);
+                alert('Chyba pri odosielaní správy: ' + (data.error || 'Neočakávaný formát odpovede'));
             }
         })
         .catch(error => {
+            clearTimeout(timeoutId);
             console.error('Error sending message:', error);
-            alert('Chyba pri odosielaní správy');
+            
+            let errorMessage = 'Chyba pri odosielaní správy';
+            if (error.name === 'AbortError') {
+                errorMessage = 'Požiadavka bola zrušená kvôli dlhému času odozvy. Skúste to znovu s kratšou správou.';
+            } else if (error.message.includes('Failed to fetch')) {
+                errorMessage = 'Chyba pripojenia k serveru. Skontrolujte internetové pripojenie.';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = 'Požiadavka vypršala. Model možno potrebuje viac času na odpoveď.';
+            } else {
+                errorMessage += ': ' + error.message;
+            }
+            
+            alert(errorMessage);
         })
         .finally(() => {
+            clearTimeout(timeoutWarning);
+            clearTimeout(timeoutId);
+            
             // Re-enable input
             input.disabled = false;
             sendBtn.disabled = false;
             document.querySelector('.send-text').style.display = 'inline';
             document.querySelector('.loading-text').style.display = 'none';
+            document.querySelector('.loading-text').textContent = 'Odosielam...';
             input.focus();
         });
 }

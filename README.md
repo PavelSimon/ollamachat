@@ -65,7 +65,18 @@ uv sync --dev
 
 # Spustenie testov
 uv run pytest
+
+# Testovanie OLLAMA pripojenia (integration test)
+uv run python tests/test_ollama_integration.py
+
+# Testovanie s vlastným OLLAMA serverom
+uv run python tests/test_ollama_integration.py http://your-server:11434
 ```
+
+### Typy testov
+
+- **Unit testy** (`tests/test_ollama.py`): Testujú funkcionalitu s mock objektmi
+- **Integration testy** (`tests/test_ollama_integration.py`): Testujú skutočné pripojenie k OLLAMA serveru
 
 ## Production Deployment
 

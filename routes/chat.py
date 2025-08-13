@@ -151,8 +151,10 @@ def api_send_message():
         })
         
         # Send to OLLAMA
+        app.logger.info(f"Sending chat request to model {model_name} for user {current_user.id}")
         response = client.chat(model_name, conversation)
         ai_content = response.get('message', {}).get('content', 'Chyba: Prázdna odpoveď')
+        app.logger.info(f"Received response from model {model_name}, length: {len(ai_content)} chars")
         
         # Save AI response
         ai_message = MessageOperations.add_message(

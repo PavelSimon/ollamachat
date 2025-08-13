@@ -11,7 +11,7 @@ class OllamaClient:
     def __init__(self, base_url: str = "http://192.168.1.23:11434"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        self.session.timeout = 30
+        # Remove global timeout, set per-request timeouts instead
     
     def test_connection(self) -> bool:
         """Test if OLLAMA server is accessible"""
@@ -25,7 +25,7 @@ class OllamaClient:
     def get_models(self) -> List[Dict]:
         """Get list of available models from OLLAMA server"""
         try:
-            response = self.session.get(f"{self.base_url}/api/tags")
+            response = self.session.get(f"{self.base_url}/api/tags", timeout=10)
             response.raise_for_status()
             
             data = response.json()
@@ -63,7 +63,7 @@ class OllamaClient:
             response = self.session.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=60  # Longer timeout for chat responses
+                timeout=120  # Extended timeout for chat responses (2 minutes)
             )
             response.raise_for_status()
             
@@ -83,14 +83,17 @@ class OllamaClient:
                 }
                 
         except requests.exceptions.Timeout:
-            logger.error("Chat request timed out")
-            raise OllamaConnectionError("Požiadavka vypršala. Skúste to znovu.")
+            logger.error(f"Chat request timed out for model {model}")
+            raise OllamaConnectionError("Požiadavka vypršala. Model možno potrebuje viac času na odpoveď. Skúste to znovu alebo použite iný model.")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error: {e}")
+            raise OllamaConnectionError("Chyba pripojenia k OLLAMA serveru. Skontrolujte, či je server spustený.")
         except requests.exceptions.RequestException as e:
             logger.error(f"Chat request failed: {e}")
-            raise OllamaConnectionError(f"Chyba komunikácie: {e}")
+            raise OllamaConnectionError(f"Chyba komunikácie s OLLAMA serverom: {e}")
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON response: {e}")
-            raise OllamaConnectionError("Neplatná odpoveď zo servera")
+            raise OllamaConnectionError("Neplatná odpoveď zo servera. Server možno nie je správne nakonfigurovaný.")
     
     def _handle_stream_response(self, response) -> Dict:
         """Handle streaming response from OLLAMA"""
@@ -133,7 +136,7 @@ class OllamaClient:
             response = self.session.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=60
+                timeout=120  # Extended timeout for generate responses (2 minutes)
             )
             response.raise_for_status()
             
