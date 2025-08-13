@@ -1,0 +1,254 @@
+/* Settings page styles */
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-header h2 {
+    margin: 0;
+}
+
+.settings-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+}
+
+.settings-description {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.form-text {
+    color: #666;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    margin-left: 10px;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+}
+
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid #007bff;
+    color: #007bff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+}
+
+.connection-info {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.status-unknown {
+    color: #6c757d;
+}
+
+.status-connected {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.status-disconnected {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.models-container {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    min-height: 100px;
+}
+
+.model-item {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.model-item:last-child {
+    border-bottom: none;
+}
+
+.model-name {
+    font-weight: 500;
+}
+
+.model-size {
+    color: #666;
+    font-size: 14px;
+}
+
+.personal-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.setting-item {
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    background-color: #fafafa;
+}
+
+.setting-item h4 {
+    margin: 0 0 10px 0;
+    color: #495057;
+}
+
+.chat-management {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    background: white;
+    margin: 10px 0;
+}
+
+.chat-item-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #f1f3f4;
+    cursor: pointer;
+}
+
+.chat-item-checkbox:last-child {
+    border-bottom: none;
+}
+
+.chat-item-checkbox:hover {
+    background-color: #f8f9fa;
+}
+
+.chat-item-checkbox input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+.chat-item-info {
+    flex: 1;
+}
+
+.chat-item-title {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.chat-item-date {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.chat-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.account-info {
+    background: white;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.account-info p {
+    margin: 8px 0;
+}
+
+.danger-zone {
+    border-color: #dc3545 !important;
+    background-color: #f8d7da !important;
+}
+
+.danger-zone h4 {
+    color: #721c24 !important;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border: 1px solid #dc3545;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.btn-danger:disabled {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .settings-container {
+        margin: 20px;
+        padding: 20px;
+    }
+
+    .settings-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .btn-secondary {
+        margin-left: 0;
+        margin-top: 10px;
+        width: 100%;
+    }
+
+    .chat-actions {
+        flex-direction: column;
+    }
+
+    .chat-actions button {
+        width: 100%;
+    }
+}
