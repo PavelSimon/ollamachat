@@ -12,6 +12,8 @@ dependencies = [
     "Werkzeug==2.3.7",
     "requests==2.31.0",
     "email-validator==2.2.0",
+    "marshmallow>=3.19.0",
+    "Flask-Limiter>=3.5.0",
 ]
 
 [tool.uv]

@@ -1,9 +1,20 @@
 from flask import Blueprint, jsonify, request, current_app as app
 from flask_login import login_required, current_user
+from marshmallow import ValidationError
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
 from ollama_client import OllamaClient, OllamaConnectionError
+from validation_schemas import (
+    ChatCreateSchema, ChatUpdateSchema, MessageCreateSchema,
+    validate_request_data, create_validation_error_response
+)
+from rate_limiting import api_rate_limit, RateLimits
 
 chat_bp = Blueprint('chat', __name__)
+
+# Import limiter after app initialization
+def get_limiter():
+    from app import get_limiter
+    return get_limiter()
 
 def get_user_ollama_client(user_id):
     """Get OLLAMA client configured for specific user"""
@@ -32,17 +43,19 @@ def api_chats():
     
     elif request.method == 'POST':
         # Create new chat
-        data = request.get_json()
-        title = data.get('title') if data else None
-        
         try:
-            chat = ChatOperations.create_chat(current_user.id, title)
+            data = request.get_json() or {}
+            validated_data = validate_request_data(ChatCreateSchema, data)
+            
+            chat = ChatOperations.create_chat(current_user.id, validated_data['title'])
             return jsonify({
                 'id': chat.id,
                 'title': chat.get_title(),
                 'created_at': chat.created_at.isoformat(),
                 'message_count': 0
             }), 201
+        except ValidationError as e:
+            return jsonify(create_validation_error_response(e)[0]), 400
         except Exception as e:
             app.logger.error(f"Error creating chat for user {current_user.id}: {str(e)}")
             return jsonify({'error': f'Chyba pri vytváraní chatu: {str(e)}'}), 500
@@ -87,41 +100,44 @@ def api_chat_detail(chat_id):
     
     elif request.method == 'PUT':
         # Update chat (e.g., title)
-        data = request.get_json()
-        if not data or 'title' not in data:
-            return jsonify({'error': 'Chýba title v požiadavke'}), 400
-        
-        chat = ChatOperations.update_chat_title(chat_id, current_user.id, data['title'])
-        if chat:
-            return jsonify({
-                'id': chat.id,
-                'title': chat.title,
-                'created_at': chat.created_at.isoformat()
-            })
-        else:
-            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+            
+            validated_data = validate_request_data(ChatUpdateSchema, data)
+            
+            chat = ChatOperations.update_chat_title(chat_id, current_user.id, validated_data['title'])
+            if chat:
+                return jsonify({
+                    'id': chat.id,
+                    'title': chat.title,
+                    'created_at': chat.created_at.isoformat()
+                })
+            else:
+                return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+        except ValidationError as e:
+            return jsonify(create_validation_error_response(e)[0]), 400
 
 @chat_bp.route('/api/messages', methods=['POST'])
 @login_required
 def api_send_message():
     """API endpoint for sending messages to AI"""
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
-    
-    chat_id = data.get('chat_id')
-    message_content = data.get('message', '').strip()
-    model_name = data.get('model', 'gpt-oss:20b')
-    
-    if not chat_id or not message_content:
-        return jsonify({'error': 'Chýba chat_id alebo message'}), 400
-    
-    # Verify user owns the chat
-    chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
-    if not chat:
-        return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
-    
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+        
+        # Validate input data
+        validated_data = validate_request_data(MessageCreateSchema, data)
+        chat_id = validated_data['chat_id']
+        message_content = validated_data['message']
+        model_name = validated_data['model']
+        
+        # Verify user owns the chat
+        chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
+        if not chat:
+            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
         # Save user message
         user_message = MessageOperations.add_message(
             chat_id=chat_id,
@@ -190,14 +206,16 @@ def api_send_message():
             }
         })
         
+    except ValidationError as e:
+        return jsonify(create_validation_error_response(e)[0]), 400
     except OllamaConnectionError as e:
         return jsonify({
             'error': f'Chyba komunikácie s AI: {str(e)}',
             'user_message': {
-                'id': user_message.id,
-                'content': user_message.content,
+                'id': user_message.id if 'user_message' in locals() else None,
+                'content': message_content if 'message_content' in locals() else None,
                 'is_user': True,
-                'created_at': user_message.created_at.isoformat()
+                'created_at': user_message.created_at.isoformat() if 'user_message' in locals() else None
             }
         }), 500
     except Exception as e:
@@ -205,7 +223,7 @@ def api_send_message():
             'error': f'Neočakávaná chyba: {str(e)}',
             'user_message': {
                 'id': user_message.id if 'user_message' in locals() else None,
-                'content': message_content,
+                'content': message_content if 'message_content' in locals() else None,
                 'is_user': True,
                 'created_at': user_message.created_at.isoformat() if 'user_message' in locals() else None
             }

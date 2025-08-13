@@ -2,8 +2,13 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 db = SQLAlchemy()
+
+def get_default_ollama_host():
+    """Get default OLLAMA host from environment or fallback"""
+    return os.environ.get('DEFAULT_OLLAMA_HOST', 'http://localhost:11434')
 
 class User(UserMixin, db.Model):
     """User model for authentication and user management"""
@@ -35,7 +40,7 @@ class UserSettings(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    ollama_host = db.Column(db.String(255), default='http://192.168.1.23:11434')
+    ollama_host = db.Column(db.String(255), default=get_default_ollama_host)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -45,6 +50,12 @@ class UserSettings(db.Model):
 class Chat(db.Model):
     """Chat conversation model"""
     __tablename__ = 'chats'
+    __table_args__ = (
+        # Index for sorting chats by update time for specific users
+        db.Index('idx_chats_user_updated', 'user_id', 'updated_at'),
+        # Index for sorting chats by creation time for specific users  
+        db.Index('idx_chats_user_created', 'user_id', 'created_at'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
@@ -70,6 +81,12 @@ class Chat(db.Model):
 class Message(db.Model):
     """Individual message in a chat"""
     __tablename__ = 'messages'
+    __table_args__ = (
+        # Composite index for efficiently retrieving messages by chat and ordering by time
+        db.Index('idx_messages_chat_created', 'chat_id', 'created_at'),
+        # Index for filtering messages by user/AI type within chats
+        db.Index('idx_messages_chat_user', 'chat_id', 'is_user'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     chat_id = db.Column(db.Integer, db.ForeignKey('chats.id'), nullable=False, index=True)

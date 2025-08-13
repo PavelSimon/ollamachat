@@ -1,5 +1,6 @@
 import requests
 import json
+import os
 from typing import List, Dict, Optional
 import logging
 
@@ -8,7 +9,9 @@ logger = logging.getLogger(__name__)
 class OllamaClient:
     """Client for communicating with OLLAMA API"""
     
-    def __init__(self, base_url: str = "http://192.168.1.23:11434"):
+    def __init__(self, base_url: str = None):
+        if base_url is None:
+            base_url = os.environ.get('DEFAULT_OLLAMA_HOST', 'http://localhost:11434')
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         # Remove global timeout, set per-request timeouts instead

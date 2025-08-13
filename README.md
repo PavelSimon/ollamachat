@@ -27,6 +27,16 @@ cd ollama-chat
 uv sync
 ```
 
+3. Nakonfigurujte prostredie:
+```bash
+# Skopírujte príklad konfigurácie
+cp .env.example .env
+
+# Editujte .env súbor a nastavte potrebné premenné
+# DÔLEŽITÉ: V produkcii vygenerujte bezpečný SECRET_KEY:
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+```
+
 ## Spustenie
 
 ```bash
@@ -53,9 +63,36 @@ Aplikácia bude dostupná na `http://localhost:5000`
 
 ## Konfigurácia
 
-- Predvolený OLLAMA server: `http://192.168.1.23:11434`
-- Databáza: SQLite v `instance/chat.db`
-- Nastavenia možno zmeniť v aplikácii po prihlásení
+### Premenné prostredia
+
+Aplikácia používa nasledujúce premenné prostredia (definované v `.env` súbore):
+
+- `SECRET_KEY` - **POVINNÝ v produkcii!** Kryptografický kľúč pre session a CSRF ochranu
+- `FLASK_ENV` - Prostredie aplikácie (`development`, `production`, `testing`)
+- `DATABASE_URL` - Pripojovací reťazec k databáze (predvolene SQLite)
+- `DEFAULT_OLLAMA_HOST` - Predvolený OLLAMA server (predvolene `http://localhost:11434`)
+- `LOG_LEVEL` - Úroveň logovania (predvolene `INFO`)
+- `RATELIMIT_STORAGE_URL` - Úložisko pre rate limiting (predvolene `memory://`, v produkcii odporúčame Redis)
+
+### Bezpečnostné upozornenia
+
+⚠️ **DÔLEŽITÉ pre produkčné nasadenie:**
+
+1. **Vždy nastavte vlastný SECRET_KEY:**
+   ```bash
+   # Vygenerujte bezpečný kľúč
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+
+2. **Použite HTTPS v produkcii** - nastavte `SESSION_COOKIE_SECURE=true` v `.env`
+
+3. **Použite robustnú databázu** - SQLite nie je vhodný pre produkciu s viacerými používateľmi
+
+### Základné nastavenia
+
+- Predvolený OLLAMA server: `http://localhost:11434` (konfigurovateľný)
+- Databáza: SQLite v `instance/chat.db` (konfigurovateľná)
+- Nastavenia možno zmeniť v aplikácii po prihlásení alebo v `.env` súbore
 
 ## Vývoj
 
@@ -71,6 +108,12 @@ uv run python tests/test_ollama_integration.py
 
 # Testovanie s vlastným OLLAMA serverom
 uv run python tests/test_ollama_integration.py http://your-server:11434
+
+# Validácia konfigurácie
+uv run python validate_config.py
+
+# Migrácia databázy (pridanie výkonnostných indexov)
+uv run python migrate_database.py
 ```
 
 ### Typy testov
@@ -107,3 +150,6 @@ docker-compose up -d
 - ✅ Organizovaný CSS a JavaScript (static/css/, static/js/)
 - ✅ Rozšírené timeout handling pre pomalé modely
 - ✅ Diagnostické nástroje a integration testy
+- ✅ Comprehensive input validation pre všetky API endpointy
+- ✅ Databázové indexy pre optimalizovaný výkon
+- ✅ Rate limiting pre ochranu pred DoS útokmi
