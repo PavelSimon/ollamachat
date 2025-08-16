@@ -42,16 +42,16 @@ def sanitize_message_content(content):
 def api_chats():
     """API endpoint for chat management"""
     if request.method == 'GET':
-        # Get all user chats
-        chats = ChatOperations.get_user_chats(current_user.id)
+        # Get all user chats with message counts in single query (prevents N+1)
+        chats_with_counts = ChatOperations.get_user_chats_with_message_counts(current_user.id)
         chat_list = []
         
-        for chat in chats:
+        for chat, message_count in chats_with_counts:
             chat_data = {
                 'id': chat.id,
                 'title': chat.get_title(),
                 'created_at': chat.created_at.isoformat(),
-                'message_count': len(chat.messages)
+                'message_count': message_count or 0
             }
             chat_list.append(chat_data)
         
@@ -244,9 +244,8 @@ def api_send_message():
             is_user=True
         )
         
-        # Get OLLAMA client for user (direct approach)
+        # Get OLLAMA client for user and use as context manager for proper cleanup
         user_settings = SettingsOperations.get_user_settings(current_user.id)
-        client = OllamaClient(user_settings.ollama_host)
         
         # Prepare conversation history for context
         recent_messages = MessageOperations.get_latest_messages(chat_id, limit=10)
@@ -274,9 +273,10 @@ def api_send_message():
             "content": final_message
         })
         
-        # Send to OLLAMA
-        response = client.chat(model_name, conversation)
-        ai_content = response.get('message', {}).get('content', 'Chyba: Prázdna odpoveď')
+        # Send to OLLAMA using context manager to ensure session cleanup
+        with OllamaClient(user_settings.ollama_host) as client:
+            response = client.chat(model_name, conversation)
+            ai_content = response.get('message', {}).get('content', 'Chyba: Prázdna odpoveď')
         
         # Save AI response
         ai_message = MessageOperations.add_message(

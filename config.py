@@ -28,6 +28,16 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or generate_secret_key()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # SQLite optimizations
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,  # Recycle connections every 5 minutes
+        'connect_args': {
+            'check_same_thread': False,
+            'timeout': 30,
+        }
+    }
+    
     # Session configuration
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
     SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS

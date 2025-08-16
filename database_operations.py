@@ -55,6 +55,19 @@ class ChatOperations:
         return Chat.query.filter_by(user_id=user_id).order_by(Chat.created_at.desc()).all()
     
     @staticmethod
+    def get_user_chats_with_message_counts(user_id):
+        """Get all chats for user with message counts in single query"""
+        from sqlalchemy import func
+        return db.session.query(
+            Chat,
+            func.count(Message.id).label('message_count')
+        ).outerjoin(Message).filter(
+            Chat.user_id == user_id
+        ).group_by(Chat.id).order_by(
+            Chat.created_at.desc()
+        ).all()
+    
+    @staticmethod
     def get_chat_by_id(chat_id, user_id):
         """Get chat by ID, ensuring it belongs to the user"""
         return Chat.query.filter_by(id=chat_id, user_id=user_id).first()

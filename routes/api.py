@@ -15,17 +15,16 @@ def get_user_ollama_client(user_id):
 @login_required
 def test_connection():
     """API endpoint to test OLLAMA connection"""
+    user_settings = SettingsOperations.get_user_settings(current_user.id)
     try:
-        client = get_user_ollama_client(current_user.id)
-        user_settings = SettingsOperations.get_user_settings(current_user.id)
-        connected = client.test_connection()
+        with get_user_ollama_client(current_user.id) as client:
+            connected = client.test_connection()
         
         return jsonify({
             'connected': connected,
             'host': user_settings.ollama_host
         })
     except OllamaConnectionError as e:
-        user_settings = SettingsOperations.get_user_settings(current_user.id)
         return jsonify({
             'connected': False,
             'error': str(e),
@@ -44,10 +43,10 @@ def get_models():
     """API endpoint to get available OLLAMA models"""
     user_settings = SettingsOperations.get_user_settings(current_user.id)
     try:
-        # Get direct client and fetch models
-        client = get_user_ollama_client(current_user.id)
-        models = client.get_models()
-        version_info = client.get_version()
+        # Get direct client and fetch models using context manager
+        with get_user_ollama_client(current_user.id) as client:
+            models = client.get_models()
+            version_info = client.get_version()
         
         return jsonify({
             'models': models,

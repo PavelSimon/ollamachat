@@ -16,6 +16,23 @@ class OllamaClient:
         self.session = requests.Session()
         # Remove global timeout, set per-request timeouts instead
     
+    def close(self):
+        """Close the session to prevent memory leaks"""
+        if hasattr(self, 'session') and self.session:
+            self.session.close()
+    
+    def __del__(self):
+        """Ensure session is closed when object is destroyed"""
+        self.close()
+    
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close session"""
+        self.close()
+    
     def test_connection(self) -> bool:
         """Test if OLLAMA server is accessible"""
         try:
@@ -96,15 +113,21 @@ class OllamaClient:
                 # Handle streaming response
                 return self._handle_stream_response(response)
             else:
-                # Handle regular response
+                # Handle regular response - only extract essential data for memory efficiency
                 data = response.json()
+                
+                # Extract only the message content to reduce memory footprint
+                message_content = data.get('message', {}).get('content', '')
+                
+                # Clear the response object to help with garbage collection
+                response.close()
+                
                 return {
-                    'message': data.get('message', {}),
+                    'message': {'content': message_content},
                     'done': data.get('done', True),
-                    'total_duration': data.get('total_duration', 0),
-                    'load_duration': data.get('load_duration', 0),
-                    'prompt_eval_count': data.get('prompt_eval_count', 0),
-                    'eval_count': data.get('eval_count', 0)
+                    # Only include performance metrics if needed for debugging
+                    'total_duration': data.get('total_duration', 0) if logger.isEnabledFor(logging.DEBUG) else None,
+                    'eval_count': data.get('eval_count', 0) if logger.isEnabledFor(logging.DEBUG) else None
                 }
                 
         except requests.exceptions.Timeout:
@@ -121,9 +144,9 @@ class OllamaClient:
             raise OllamaConnectionError("Neplatná odpoveď zo servera. Server možno nie je správne nakonfigurovaný.")
     
     def _handle_stream_response(self, response) -> Dict:
-        """Handle streaming response from OLLAMA"""
+        """Handle streaming response from OLLAMA with memory optimization"""
         full_content = ""
-        last_response = {}
+        done = False
         
         try:
             for line in response.iter_lines():
@@ -131,18 +154,19 @@ class OllamaClient:
                     data = json.loads(line.decode('utf-8'))
                     if 'message' in data and 'content' in data['message']:
                         full_content += data['message']['content']
-                    last_response = data
                     if data.get('done', False):
+                        done = True
                         break
+                    # Clear the line data immediately to help garbage collection
+                    data = None
             
-            # Return the complete response
+            # Close response to free memory
+            response.close()
+            
+            # Return only essential data to reduce memory footprint
             return {
-                'message': {'role': 'assistant', 'content': full_content},
-                'done': True,
-                'total_duration': last_response.get('total_duration', 0),
-                'load_duration': last_response.get('load_duration', 0),
-                'prompt_eval_count': last_response.get('prompt_eval_count', 0),
-                'eval_count': last_response.get('eval_count', 0)
+                'message': {'content': full_content},
+                'done': done
             }
             
         except json.JSONDecodeError as e:

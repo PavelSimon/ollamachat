@@ -6,6 +6,9 @@ from flask_limiter.errors import RateLimitExceeded
 import os
 import logging
 from models import db, User
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+import sqlite3
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -18,6 +21,24 @@ app.config.from_object(config[config_name])
 # Validate production configuration if needed
 if config_name == 'production':
     validate_production_config()
+
+# SQLite optimization event listener
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Set SQLite performance optimizations"""
+    if 'sqlite' in str(dbapi_connection):
+        cursor = dbapi_connection.cursor()
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # Set synchronous to NORMAL for better performance
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        # Increase cache size to 64MB
+        cursor.execute("PRAGMA cache_size=16384")
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys=ON")
+        # Set temp store to memory
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        cursor.close()
 
 # Initialize extensions
 db.init_app(app)
