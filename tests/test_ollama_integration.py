@@ -4,7 +4,12 @@ Simple test script for OLLAMA connection and chat functionality
 """
 
 import sys
+import os
 import time
+
+# Add parent directory to path to import ollama_client
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from ollama_client import OllamaClient, OllamaConnectionError
 
 def test_connection(host="http://192.168.1.23:11434"):
@@ -55,7 +60,24 @@ def test_chat(host="http://192.168.1.23:11434", model_name=None):
             if not models:
                 print("✗ No models available for testing")
                 return False
-            model_name = models[0]['name']
+            
+            # Prefer smaller, faster models for testing
+            preferred_models = ['llama3.2:latest', 'llama3.1:8b', 'codellama:7b', 'gpt-oss:20b']
+            model_name = None
+            
+            for preferred in preferred_models:
+                for model in models:
+                    if model['name'] == preferred:
+                        model_name = preferred
+                        break
+                if model_name:
+                    break
+            
+            # If no preferred model found, use the smallest available
+            if not model_name:
+                smallest_model = min(models, key=lambda x: x['size'])
+                model_name = smallest_model['name']
+                
         except Exception as e:
             print(f"✗ Could not get models: {e}")
             return False

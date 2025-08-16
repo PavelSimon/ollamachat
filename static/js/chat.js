@@ -347,6 +347,10 @@ function sendMessage() {
     const sendBtn = document.getElementById('send-btn');
     const message = input.value.trim();
 
+    // Check if internet search is enabled (moved to top)
+    const searchToggle = document.getElementById('internet-search-toggle');
+    const useInternetSearch = searchToggle ? searchToggle.checked : false;
+
     if (!message || !currentChatId || !selectedModel) {
         if (!selectedModel) {
             alert('Vyberte model pre komunikáciu');
@@ -384,9 +388,6 @@ function sendMessage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout
 
-    // Check if internet search is enabled
-    const useInternetSearch = document.getElementById('internet-search-toggle').checked;
-    
     fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -414,7 +415,10 @@ function sendMessage() {
                 
                 // Reset search toggle if it was used
                 if (useInternetSearch) {
-                    document.getElementById('internet-search-toggle').checked = false;
+                    const toggleElement = document.getElementById('internet-search-toggle');
+                    if (toggleElement) {
+                        toggleElement.checked = false;
+                    }
                 }
 
                 // Reload messages

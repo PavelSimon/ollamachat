@@ -1,14 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app as app
 from flask_login import login_required, current_user
-from marshmallow import ValidationError
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
-from ollama_client import OllamaConnectionError
-from ollama_pool import get_pooled_client
-from search_service import search_service
-from validation_schemas import (
-    ChatCreateSchema, ChatUpdateSchema, MessageCreateSchema,
-    validate_request_data, create_validation_error_response
-)
+from ollama_client import OllamaClient, OllamaConnectionError
+# from search_service import search_service  # Temporarily disabled
 from error_handlers import ErrorHandler
 from rate_limiting import api_rate_limit, RateLimits
 
@@ -19,10 +13,7 @@ def get_limiter():
     from app import get_limiter
     return get_limiter()
 
-def get_user_ollama_client(user_id):
-    """Get pooled OLLAMA client configured for specific user"""
-    user_settings = SettingsOperations.get_user_settings(user_id)
-    return get_pooled_client(user_settings.ollama_host)
+# Simplified - removed complex pooling for now
 
 @chat_bp.route('/api/chats', methods=['GET', 'POST'])
 @login_required
@@ -134,17 +125,19 @@ def api_send_message():
         if not data:
             return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
         
-        # Validate input data
-        validated_data = validate_request_data(MessageCreateSchema, data)
-        chat_id = validated_data['chat_id']
-        message_content = validated_data['message']
-        model_name = validated_data['model']
-        use_internet_search = validated_data.get('use_internet_search', False)
+        # Simple validation (bypass complex schema temporarily)
+        chat_id = data.get('chat_id')
+        message_content = data.get('message', '').strip()
+        model_name = data.get('model', 'gpt-oss:20b')
+        use_internet_search = data.get('use_internet_search', False)
+        
+        if not chat_id or not message_content:
+            return jsonify({'error': 'Chýba chat_id alebo message'}), 400
         
         # Verify user owns the chat
         chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
         if not chat:
-            return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
+            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
         # Save user message
         user_message = MessageOperations.add_message(
             chat_id=chat_id,
@@ -152,8 +145,9 @@ def api_send_message():
             is_user=True
         )
         
-        # Get OLLAMA client for user
-        client = get_user_ollama_client(current_user.id)
+        # Get OLLAMA client for user (direct approach)
+        user_settings = SettingsOperations.get_user_settings(current_user.id)
+        client = OllamaClient(user_settings.ollama_host)
         
         # Prepare conversation history for context
         recent_messages = MessageOperations.get_latest_messages(chat_id, limit=10)
@@ -167,23 +161,18 @@ def api_send_message():
                 "content": msg.content
             })
         
-        # Handle internet search if requested
-        enhanced_message = message_content
-        search_context = ""
+        # Handle internet search if requested (temporarily disabled)
+        final_message = message_content
         
         if use_internet_search:
-            try:
-                search_context = search_service.search_and_format(message_content, max_results=5)
-                enhanced_message = f"{search_context}\nBased on the above search results, please answer: {message_content}"
-            except Exception as e:
-                app.logger.error(f"Internet search failed: {e}")
-                search_context = f"Internet search failed: {str(e)}\n\n"
-                enhanced_message = f"{search_context}Please answer based on your knowledge: {message_content}"
+            # Search temporarily disabled for debugging
+            app.logger.info("Internet search requested but temporarily disabled")
+            final_message = f"[Internet search temporarily disabled] {message_content}"
         
-        # Add current user message (with search context if applicable)
+        # Add current user message
         conversation.append({
             "role": "user", 
-            "content": enhanced_message
+            "content": final_message
         })
         
         # Send to OLLAMA
@@ -224,25 +213,15 @@ def api_send_message():
             }
         })
         
-    except ValidationError as e:
-        return jsonify(create_validation_error_response(e)[0]), 400
     except OllamaConnectionError as e:
+        app.logger.error(f"OLLAMA connection error: {e}")
         return jsonify({
-            'error': f'Chyba komunikácie s AI: {str(e)}',
-            'user_message': {
-                'id': user_message.id if 'user_message' in locals() else None,
-                'content': message_content if 'message_content' in locals() else None,
-                'is_user': True,
-                'created_at': user_message.created_at.isoformat() if 'user_message' in locals() else None
-            }
+            'error': f'Chyba komunikácie s AI: {str(e)}'
         }), 500
     except Exception as e:
+        app.logger.error(f"Unexpected error in chat: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'error': f'Neočakávaná chyba: {str(e)}',
-            'user_message': {
-                'id': user_message.id if 'user_message' in locals() else None,
-                'content': message_content if 'message_content' in locals() else None,
-                'is_user': True,
-                'created_at': user_message.created_at.isoformat() if 'user_message' in locals() else None
-            }
+            'error': f'Neočakávaná chyba: {str(e)}'
         }), 500
