@@ -61,6 +61,7 @@ app.register_blueprint(chat_bp)
 # Chat endpoints
 limiter.limit("10 per minute")(app.view_functions['chat.api_chats'])
 limiter.limit("20 per minute")(app.view_functions['chat.api_send_message'])
+limiter.limit("5 per minute")(app.view_functions['chat.api_bulk_delete_chats'])  # Restrictive for bulk operations
 
 # Legacy API endpoints  
 limiter.limit("30 per minute")(app.view_functions['api.get_models'])
@@ -68,9 +69,11 @@ limiter.limit("10 per minute")(app.view_functions['api.test_connection'])
 
 # Removed unused v1 API rate limiting
 
-# Auth endpoints (more restrictive)
+# Auth endpoints (more restrictive for security)
 limiter.limit("5 per minute")(app.view_functions['auth.login'])
+limiter.limit("10 per hour")(app.view_functions['auth.login'])  # Additional hourly limit
 limiter.limit("3 per minute")(app.view_functions['auth.register'])
+limiter.limit("5 per hour")(app.view_functions['auth.register'])  # Additional hourly limit
 
 # Settings endpoints
 if 'settings.api_settings' in app.view_functions:
@@ -112,11 +115,31 @@ def internal_error(error):
 # Security headers
 @app.after_request
 def add_security_headers(response):
+    # Basic security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    
+    # Content Security Policy
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    response.headers['Content-Security-Policy'] = csp
+    
+    # HSTS for production with HTTPS
     if app.config.get('SESSION_COOKIE_SECURE'):
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    
     return response
 
 # Setup enhanced logging

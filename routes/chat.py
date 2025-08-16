@@ -4,6 +4,8 @@ from database_operations import ChatOperations, MessageOperations, SettingsOpera
 from ollama_client import OllamaClient, OllamaConnectionError
 from error_handlers import ErrorHandler
 from rate_limiting import api_rate_limit, RateLimits
+import html
+import re
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -11,6 +13,27 @@ chat_bp = Blueprint('chat', __name__)
 def get_limiter():
     from app import get_limiter
     return get_limiter()
+
+def sanitize_message_content(content):
+    """Sanitize user message content for security"""
+    if not content:
+        return content
+    
+    # Strip whitespace
+    content = content.strip()
+    
+    # Limit message length
+    if len(content) > 10000:
+        content = content[:10000]
+    
+    # Remove potentially dangerous characters but keep basic formatting
+    # Allow letters, numbers, spaces, basic punctuation, and common symbols
+    content = re.sub(r'[^\w\s\.\,\?\!\-\(\)\[\]\{\}\:\;\"\'\`\~\@\#\$\%\^\&\*\+\=\_\|\\\/<>]', '', content)
+    
+    # Escape HTML to prevent XSS
+    content = html.escape(content, quote=True)
+    
+    return content
 
 # Simplified - removed complex pooling for now
 
@@ -40,9 +63,11 @@ def api_chats():
             data = request.get_json() or {}
             title = data.get('title')
             
-            # Simple validation
-            if title and len(title) > 200:
-                return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
+            # Simple validation and sanitization
+            if title:
+                title = html.escape(title.strip(), quote=True)
+                if len(title) > 200:
+                    return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
             
             chat = ChatOperations.create_chat(current_user.id, title)
             return jsonify({
@@ -106,6 +131,9 @@ def api_chat_detail(chat_id):
             title = data.get('title', '').strip()
             if not title:
                 return jsonify({'error': 'Chýba titol'}), 400
+            
+            # Sanitize title
+            title = html.escape(title, quote=True)
             if len(title) > 200:
                 return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
             
@@ -125,6 +153,65 @@ def api_chat_detail(chat_id):
                 "Chyba pri aktualizácii chatu"
             )
 
+@chat_bp.route('/api/chats/bulk-delete', methods=['POST'])
+@login_required
+def api_bulk_delete_chats():
+    """API endpoint for bulk deleting multiple chats"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+        
+        chat_ids = data.get('chat_ids', [])
+        if not chat_ids or not isinstance(chat_ids, list):
+            return jsonify({'error': 'Chýba zoznam chat_ids'}), 400
+        
+        # Validate that all chat_ids are integers
+        try:
+            chat_ids = [int(chat_id) for chat_id in chat_ids]
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Neplatné chat_ids - musia byť čísla'}), 400
+        
+        if len(chat_ids) > 100:  # Reasonable limit
+            return jsonify({'error': 'Príliš veľa chatov na vymazanie naraz (max 100)'}), 400
+        
+        # Delete chats one by one and count successful deletions
+        deleted_count = 0
+        failed_deletions = []
+        
+        for chat_id in chat_ids:
+            try:
+                success = ChatOperations.delete_chat(chat_id, current_user.id)
+                if success:
+                    deleted_count += 1
+                else:
+                    failed_deletions.append(chat_id)
+            except Exception as e:
+                app.logger.error(f"Error deleting chat {chat_id} for user {current_user.id}: {e}")
+                failed_deletions.append(chat_id)
+        
+        # Prepare response
+        response_data = {
+            'success': True,
+            'deleted_count': deleted_count,
+            'total_requested': len(chat_ids)
+        }
+        
+        if failed_deletions:
+            response_data['failed_deletions'] = failed_deletions
+            response_data['message'] = f"Vymazané {deleted_count} z {len(chat_ids)} chatov. Niektoré chaty sa nepodarilo vymazať."
+        else:
+            response_data['message'] = f"Úspešne vymazané všetky {deleted_count} chaty."
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        return ErrorHandler.internal_error(
+            e,
+            f"bulk deleting chats for user {current_user.id}",
+            "Chyba pri hromadnom vymazávaní chatov"
+        )
+
 @chat_bp.route('/api/messages', methods=['POST'])
 @login_required
 def api_send_message():
@@ -134,11 +221,14 @@ def api_send_message():
         if not data:
             return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
         
-        # Simple validation (bypass complex schema temporarily)
+        # Simple validation and sanitization
         chat_id = data.get('chat_id')
-        message_content = data.get('message', '').strip()
+        raw_message_content = data.get('message', '')
         model_name = data.get('model', 'gpt-oss:20b')
         use_internet_search = data.get('use_internet_search', False)
+        
+        # Sanitize the message content
+        message_content = sanitize_message_content(raw_message_content)
         
         if not chat_id or not message_content:
             return jsonify({'error': 'Chýba chat_id alebo message'}), 400

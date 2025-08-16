@@ -1,0 +1,31 @@
+# OLLAMA Chat Environment Configuration
+# Copy this file to .env and update the values for your environment
+
+# Flask Configuration
+FLASK_ENV=development
+# Generate a secure secret key for production:
+# python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=your-secret-key-here
+
+# Database Configuration
+# For development, SQLite is used by default
+# For production, use a proper database like PostgreSQL
+# DATABASE_URL=postgresql://user:password@localhost/ollamachat
+DATABASE_URL=sqlite:///chat.db
+
+# OLLAMA Configuration
+# Default OLLAMA server URL
+DEFAULT_OLLAMA_HOST=http://localhost:11434
+
+# Security Settings (Production)
+# Set to true when using HTTPS in production
+SESSION_COOKIE_SECURE=false
+
+# Logging
+LOG_LEVEL=INFO
+
+# Rate limiting storage
+# For production, use Redis for better performance and persistence
+# RATELIMIT_STORAGE_URL=redis://localhost:6379
+# For development, memory storage is used by default
+RATELIMIT_STORAGE_URL=memory://

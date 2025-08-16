@@ -1,7 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from forms import LoginForm, RegisterForm
 from database_operations import UserOperations
+import time
+import secrets
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -12,10 +14,26 @@ def login():
     
     form = LoginForm()
     if form.validate_on_submit():
+        # Add timing attack protection - always take similar time
+        start_time = time.time()
+        
         user = UserOperations.authenticate_user(form.email.data, form.password.data)
+        
+        # Ensure minimum processing time to prevent timing attacks
+        elapsed = time.time() - start_time
+        if elapsed < 0.1:  # Minimum 100ms
+            time.sleep(0.1 - elapsed)
+        
         if user:
+            # Clear existing session data to prevent session fixation
+            session.clear()
             login_user(user)
+            
+            # Validate and sanitize next_page to prevent open redirects
             next_page = request.args.get('next')
+            if next_page and not next_page.startswith('/'):
+                next_page = None
+                
             flash('Úspešne ste sa prihlásili!', 'success')
             return redirect(next_page) if next_page else redirect(url_for('main.chat'))
         else:
@@ -42,6 +60,8 @@ def register():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    # Clear all session data on logout for security
+    session.clear()
     logout_user()
     flash('Boli ste odhlásení.', 'success')
     return redirect(url_for('auth.login'))

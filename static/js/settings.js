@@ -212,18 +212,27 @@ function deleteSelectedChats() {
         },
         body: JSON.stringify({ chat_ids: chatIds })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
             loadChatManagement(); // Reload the chat list
-            alert(`Úspešne vymazané ${data.deleted_count} chatov.`);
+            if (data.failed_deletions && data.failed_deletions.length > 0) {
+                alert(`${data.message}\nNepodarilo sa vymazať chaty: ${data.failed_deletions.join(', ')}`);
+            } else {
+                alert(`Úspešne vymazané ${data.deleted_count} chatov.`);
+            }
         } else {
             alert('Chyba pri vymazávaní chatov: ' + (data.error || 'Neznáma chyba'));
         }
     })
     .catch(error => {
         console.error('Error deleting chats:', error);
-        alert('Chyba pri vymazávaní chatov');
+        alert('Chyba pri vymazávaní chatov: ' + error.message);
     })
     .finally(() => {
         if (deleteButton) {

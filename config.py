@@ -50,6 +50,8 @@ class ProductionConfig(Config):
     
     # Security settings for production
     SESSION_COOKIE_SECURE = True  # Requires HTTPS
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Strict'  # More restrictive for production
     WTF_CSRF_ENABLED = True
     
     # Logging

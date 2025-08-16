@@ -1,7 +1,34 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
-from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError, URL
+from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError, URL, Regexp
 from database_operations import UserOperations
+import re
+
+def validate_strong_password(form, field):
+    """Custom validator for strong password requirements"""
+    password = field.data
+    if not password:
+        return
+    
+    errors = []
+    
+    if len(password) < 8:
+        errors.append("aspoň 8 znakov")
+    
+    if not re.search(r'[A-Z]', password):
+        errors.append("aspoň jedno veľké písmeno")
+    
+    if not re.search(r'[a-z]', password):
+        errors.append("aspoň jedno malé písmeno")
+    
+    if not re.search(r'\d', password):
+        errors.append("aspoň jednu číslicu")
+    
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        errors.append("aspoň jeden špeciálny znak (!@#$%^&*)")
+    
+    if errors:
+        raise ValidationError(f"Heslo musí obsahovať: {', '.join(errors)}")
 
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[
@@ -21,7 +48,8 @@ class RegisterForm(FlaskForm):
     ])
     password = PasswordField('Heslo', validators=[
         DataRequired(message='Heslo je povinné'),
-        Length(min=6, message='Heslo musí mať aspoň 6 znakov')
+        Length(min=8, max=128, message='Heslo musí mať 8-128 znakov'),
+        validate_strong_password
     ])
     password_confirm = PasswordField('Potvrdiť heslo', validators=[
         DataRequired(message='Potvrdenie hesla je povinné'),
