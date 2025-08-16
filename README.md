@@ -71,8 +71,27 @@ Aplikácia používa nasledujúce premenné prostredia (definované v `.env` sú
 - `FLASK_ENV` - Prostredie aplikácie (`development`, `production`, `testing`)
 - `DATABASE_URL` - Pripojovací reťazec k databáze (predvolene SQLite)
 - `DEFAULT_OLLAMA_HOST` - Predvolený OLLAMA server (predvolene `http://localhost:11434`)
-- `LOG_LEVEL` - Úroveň logovania (predvolene `INFO`)
+- `LOG_LEVEL` - Úroveň logovania (predvolene `ERROR` - len chyby)
+- `VERBOSE_LOGS` - Nastavte na `true` pre podrobnejšie logovania (INFO level)
 - `RATELIMIT_STORAGE_URL` - Úložisko pre rate limiting (predvolene `memory://`, v produkcii odporúčame Redis)
+
+### Internet Search
+
+Aplikácia podporuje internetové vyhľadávanie pre aktuálne informácie:
+
+- **Toggle switch**: Zapnite/vypnite internetové vyhľadávanie vedľa tlačidla "Odoslať"
+- **Zdroje**: DuckDuckGo Instant Answers + Wikipedia
+- **Automatické**: AI model dostane aktuálne informácie z internetu ako kontext
+- **Testovanie**: `python test_search.py` pre testovanie search funkcionality
+
+### Logovania
+
+Aplikácia má minimálne logovania (len chyby):
+
+- **Predvolene**: Len ERROR level logy (chyby a pomalé požiadavky)
+- **Podrobnejšie**: `VERBOSE_LOGS=true` pre INFO level logy
+- **Konzola**: `LOG_TO_CONSOLE=true` pre zobrazenie logov v konzole
+- **Súbory**: Logy sa ukladajú do `logs/` adresára
 
 ### Bezpečnostné upozornenia
 
@@ -150,6 +169,8 @@ docker-compose up -d
 - ✅ Organizovaný CSS a JavaScript (static/css/, static/js/)
 - ✅ Rozšírené timeout handling pre pomalé modely
 - ✅ Diagnostické nástroje a integration testy
+- ✅ Internet search integration (DuckDuckGo + Wikipedia)
+- ✅ Toggle switch pre zapnutie/vypnutie internetového vyhľadávania
 - ✅ Comprehensive input validation pre všetky API endpointy
 - ✅ Databázové indexy pre optimalizovaný výkon
 - ✅ Rate limiting pre ochranu pred DoS útokmi

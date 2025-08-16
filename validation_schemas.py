@@ -57,6 +57,10 @@ class MessageCreateSchema(Schema):
         validate=validate.Length(max=100),
         load_default='gpt-oss:20b'
     )
+    use_internet_search = fields.Bool(
+        required=False,
+        load_default=False
+    )
 
     @post_load
     def clean_message(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:

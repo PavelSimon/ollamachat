@@ -67,11 +67,27 @@
         <div class="message-input-container" id="message-input-container" style="display: none;">
             <div class="message-input">
                 <textarea id="message-input" placeholder="Napíšte správu..." rows="3"></textarea>
-                <div class="send-button-container">
-                    <button id="send-btn" class="btn btn-primary">
-                        <span class="send-text">Odoslať</span>
-                        <span class="loading-text" style="display: none;">Odosielam...</span>
-                    </button>
+                <div class="input-controls">
+                    <div class="search-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="internet-search-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="2" y1="12" x2="22" y2="12"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                            Hľadať na internete
+                        </span>
+                    </div>
+                    <div class="send-button-container">
+                        <button id="send-btn" class="btn btn-primary">
+                            <span class="send-text">Odoslať</span>
+                            <span class="loading-text" style="display: none;">Odosielam...</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

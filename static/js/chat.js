@@ -360,15 +360,33 @@ function sendMessage() {
     document.querySelector('.send-text').style.display = 'none';
     document.querySelector('.loading-text').style.display = 'inline';
 
+    // Update loading text based on search usage
+    if (useInternetSearch) {
+        document.querySelector('.loading-text').textContent = 'Hľadám na internete...';
+        
+        // Change to processing after 5 seconds
+        setTimeout(() => {
+            if (document.querySelector('.loading-text').style.display !== 'none') {
+                document.querySelector('.loading-text').textContent = 'Spracovávam výsledky...';
+            }
+        }, 5000);
+    }
+    
     // Add timeout warning after 30 seconds
     const timeoutWarning = setTimeout(() => {
-        document.querySelector('.loading-text').textContent = 'Spracováva sa... (môže trvať dlhšie)';
+        const loadingText = document.querySelector('.loading-text');
+        if (loadingText.style.display !== 'none') {
+            loadingText.textContent = 'Spracováva sa... (môže trvať dlhšie)';
+        }
     }, 30000);
 
     // Create AbortController for request cancellation
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 150000); // 2.5 minutes timeout
 
+    // Check if internet search is enabled
+    const useInternetSearch = document.getElementById('internet-search-toggle').checked;
+    
     fetch('/api/messages', {
         method: 'POST',
         headers: {
@@ -377,7 +395,8 @@ function sendMessage() {
         body: JSON.stringify({
             chat_id: currentChatId,
             message: message,
-            model: selectedModel
+            model: selectedModel,
+            use_internet_search: useInternetSearch
         }),
         signal: controller.signal
     })
@@ -392,6 +411,11 @@ function sendMessage() {
             if (data.user_message && data.ai_message) {
                 // Clear input
                 input.value = '';
+                
+                // Reset search toggle if it was used
+                if (useInternetSearch) {
+                    document.getElementById('internet-search-toggle').checked = false;
+                }
 
                 // Reload messages
                 loadChatMessages(currentChatId);

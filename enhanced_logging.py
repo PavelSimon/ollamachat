@@ -108,8 +108,13 @@ def setup_enhanced_logging(app):
         app: Flask application instance
     """
     
-    # Get log level from environment
-    log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    # Get log level from environment - default to ERROR for minimal output
+    # Set LOG_LEVEL=INFO or LOG_LEVEL=DEBUG for more verbose logging
+    log_level = os.environ.get('LOG_LEVEL', 'ERROR').upper()
+    
+    # Quick option: VERBOSE_LOGS=true enables INFO level logging
+    if os.environ.get('VERBOSE_LOGS', 'false').lower() == 'true':
+        log_level = 'INFO'
     
     # Create logs directory if it doesn't exist
     logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
@@ -135,7 +140,7 @@ def setup_enhanced_logging(app):
                 '%(asctime)s [%(levelname)s] [%(request_id)s] %(name)s: %(message)s'
             ))
         console_handler.addFilter(RequestContextFilter())
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.ERROR)
         root_logger.addHandler(console_handler)
         app.logger.info("Console logging enabled via LOG_TO_CONSOLE=true")
     else:
@@ -153,7 +158,7 @@ def setup_enhanced_logging(app):
     )
     app_log_handler.setFormatter(StructuredFormatter())
     app_log_handler.addFilter(RequestContextFilter())
-    app_log_handler.setLevel(logging.INFO)
+    app_log_handler.setLevel(logging.ERROR)
     root_logger.addHandler(app_log_handler)
     
     # Separate rotating error log
@@ -179,12 +184,12 @@ def setup_enhanced_logging(app):
     )
     access_log_handler.setFormatter(StructuredFormatter())
     access_log_handler.addFilter(RequestContextFilter())
-    access_log_handler.setLevel(logging.INFO)
+    access_log_handler.setLevel(logging.ERROR)
     
     # Create dedicated logger for access logs
     access_logger = logging.getLogger('access')
     access_logger.addHandler(access_log_handler)
-    access_logger.setLevel(logging.INFO)
+    access_logger.setLevel(logging.ERROR)
     access_logger.propagate = False  # Don't propagate to root logger
     
     # Performance log for slow operations
@@ -197,120 +202,71 @@ def setup_enhanced_logging(app):
     )
     perf_log_handler.setFormatter(StructuredFormatter())
     perf_log_handler.addFilter(RequestContextFilter())
-    perf_log_handler.setLevel(logging.INFO)
+    perf_log_handler.setLevel(logging.ERROR)
     
     # Create dedicated logger for performance logs
     perf_logger = logging.getLogger('performance')
     perf_logger.addHandler(perf_log_handler)
-    perf_logger.setLevel(logging.INFO)
+    perf_logger.setLevel(logging.ERROR)
     perf_logger.propagate = False  # Don't propagate to root logger
     
     # Configure Flask app logger
     app.logger.setLevel(log_level)
     
-    # Configure specific loggers
-    logging.getLogger('werkzeug').setLevel(logging.WARNING)  # Reduce Werkzeug noise
-    logging.getLogger('urllib3').setLevel(logging.WARNING)  # Reduce urllib3 noise
+    # Configure specific loggers to reduce noise
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)  # Only show Werkzeug errors
+    logging.getLogger('urllib3').setLevel(logging.ERROR)  # Only show urllib3 errors
+    logging.getLogger('requests').setLevel(logging.ERROR)  # Only show requests errors
     
-    # Add request logging middleware
+    # Add request logging middleware (minimal - only timing)
     @app.before_request
     def log_request_start():
-        """Log the start of each request."""
+        """Set request start time for performance tracking."""
         if not getattr(g, 'request_start_time', None):
             g.request_start_time = time.time()
-        
-        # Log to dedicated access logger
-        access_logger = logging.getLogger('access')
-        access_logger.info(
-            f"Request started: {request.method} {request.path}",
-            extra={
-                'event': 'request_start',
-                'method': request.method,
-                'path': request.path,
-                'query_string': request.query_string.decode('utf-8'),
-                'content_length': request.content_length,
-                'content_type': request.content_type
-            }
-        )
     
     @app.after_request
     def log_request_end(response):
-        """Log the end of each request with timing and response info."""
+        """Log only errors and slow requests."""
         duration = time.time() - getattr(g, 'request_start_time', time.time())
         g.request_duration = duration
         
-        # Safely get response size without triggering passthrough mode issues
-        response_size = 0
-        try:
-            if hasattr(response, 'content_length') and response.content_length:
-                response_size = response.content_length
-            elif hasattr(response, 'get_data'):
-                # Only try to get data if it's safe to do so
-                try:
-                    data = response.get_data(as_text=False)
-                    response_size = len(data) if data else 0
-                except (RuntimeError, AttributeError):
-                    # Response is in passthrough mode or other issue
-                    response_size = 0
-        except Exception:
-            response_size = 0
-        
-        # Log to dedicated access logger
-        access_logger = logging.getLogger('access')
-        access_logger.info(
-            f"Request completed: {request.method} {request.path} -> {response.status_code}",
-            extra={
-                'event': 'request_end',
-                'method': request.method,
-                'path': request.path,
-                'status_code': response.status_code,
-                'content_length': response.content_length,
-                'duration_ms': round(duration * 1000, 2),
-                'response_size': response_size
-            }
-        )
-        
-        # Log slow requests to performance log
-        duration_ms = round(duration * 1000, 2)
-        if duration_ms > 1000:  # Log requests slower than 1 second
-            perf_logger = logging.getLogger('performance')
-            perf_logger.warning(
-                f"Slow request: {request.method} {request.path} took {duration_ms}ms",
+        # Only log errors (4xx, 5xx status codes)
+        if response.status_code >= 400:
+            access_logger = logging.getLogger('access')
+            access_logger.error(
+                f"Request error: {request.method} {request.path} -> {response.status_code}",
                 extra={
-                    'event': 'slow_request',
+                    'event': 'request_error',
+                    'method': request.method,
+                    'path': request.path,
+                    'status_code': response.status_code,
+                    'duration_ms': round(duration * 1000, 2)
+                }
+            )
+        
+        # Log slow requests (over 2 seconds)
+        duration_ms = round(duration * 1000, 2)
+        if duration_ms > 2000:  # Only log very slow requests
+            perf_logger = logging.getLogger('performance')
+            perf_logger.error(
+                f"Very slow request: {request.method} {request.path} took {duration_ms}ms",
+                extra={
+                    'event': 'very_slow_request',
                     'method': request.method,
                     'path': request.path,
                     'duration_ms': duration_ms,
                     'status_code': response.status_code,
-                    'threshold_ms': 1000
+                    'threshold_ms': 2000
                 }
             )
         
         return response
     
-    # Log configuration summary to files
+    # Print minimal startup message to console
     console_enabled = os.environ.get('LOG_TO_CONSOLE', 'false').lower() == 'true'
-    app.logger.info(
-        "Enhanced logging configured successfully",
-        extra={
-            'event': 'logging_init',
-            'log_level': log_level,
-            'structured_format': os.environ.get('LOG_FORMAT', 'structured').lower() == 'structured',
-            'console_logging': console_enabled,
-            'log_files': {
-                'application': 'ollama_chat.log (10MB, 5 backups)',
-                'access': 'access.log (20MB, 7 backups)',
-                'errors': 'errors.log (5MB, 3 backups)',
-                'performance': 'performance.log (5MB, 3 backups)'
-            }
-        }
-    )
-    
-    # Print a simple startup message to console
     if not console_enabled:
-        print("[OLLAMA Chat] Application started - logs are being written to files")
-        print(f"[OLLAMA Chat] Monitor logs: tail -f {logs_dir}/ollama_chat.log")
-        print(f"[OLLAMA Chat] Monitor access: tail -f {logs_dir}/access.log")
+        print(f"[OLLAMA Chat] Logging: ERROR level only -> {logs_dir}/")
 
 
 def get_logger(name):

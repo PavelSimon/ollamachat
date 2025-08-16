@@ -4,6 +4,7 @@ from marshmallow import ValidationError
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
 from ollama_client import OllamaConnectionError
 from ollama_pool import get_pooled_client
+from search_service import search_service
 from validation_schemas import (
     ChatCreateSchema, ChatUpdateSchema, MessageCreateSchema,
     validate_request_data, create_validation_error_response
@@ -138,6 +139,7 @@ def api_send_message():
         chat_id = validated_data['chat_id']
         message_content = validated_data['message']
         model_name = validated_data['model']
+        use_internet_search = validated_data.get('use_internet_search', False)
         
         # Verify user owns the chat
         chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
@@ -165,17 +167,28 @@ def api_send_message():
                 "content": msg.content
             })
         
-        # Add current user message
+        # Handle internet search if requested
+        enhanced_message = message_content
+        search_context = ""
+        
+        if use_internet_search:
+            try:
+                search_context = search_service.search_and_format(message_content, max_results=5)
+                enhanced_message = f"{search_context}\nBased on the above search results, please answer: {message_content}"
+            except Exception as e:
+                app.logger.error(f"Internet search failed: {e}")
+                search_context = f"Internet search failed: {str(e)}\n\n"
+                enhanced_message = f"{search_context}Please answer based on your knowledge: {message_content}"
+        
+        # Add current user message (with search context if applicable)
         conversation.append({
             "role": "user", 
-            "content": message_content
+            "content": enhanced_message
         })
         
         # Send to OLLAMA
-        app.logger.info(f"Sending chat request to model {model_name} for user {current_user.id}")
         response = client.chat(model_name, conversation)
         ai_content = response.get('message', {}).get('content', 'Chyba: Prázdna odpoveď')
-        app.logger.info(f"Received response from model {model_name}, length: {len(ai_content)} chars")
         
         # Save AI response
         ai_message = MessageOperations.add_message(
