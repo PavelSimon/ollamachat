@@ -47,6 +47,17 @@ class Config:
     # CSRF Protection
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
+    
+    # Application Constants
+    MAX_MESSAGE_LENGTH = 10000
+    MAX_TITLE_LENGTH = 200
+    MAX_BULK_DELETE_LIMIT = 100
+    MAX_URL_LENGTH = 500
+    DEFAULT_MODEL_NAME = 'gpt-oss:20b'
+    CONVERSATION_HISTORY_LIMIT = 10
+    AUTO_TITLE_MESSAGE_LIMIT = 2
+    AUTO_TITLE_MAX_LENGTH = 50
+    AUTH_TIMING_DELAY = 0.1  # Minimum delay in seconds to prevent timing attacks
 
 class DevelopmentConfig(Config):
     """Development configuration"""

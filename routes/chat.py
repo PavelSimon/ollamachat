@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request, current_app as app
 from flask_login import login_required, current_user
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
 from ollama_client import OllamaClient, OllamaConnectionError
-from error_handlers import ErrorHandler
+from error_handlers import ErrorHandler, StandardError, ErrorType
 from rate_limiting import api_rate_limit, RateLimits
 import html
 import re
@@ -23,8 +23,8 @@ def sanitize_message_content(content):
     content = content.strip()
     
     # Limit message length
-    if len(content) > 10000:
-        content = content[:10000]
+    if len(content) > app.config['MAX_MESSAGE_LENGTH']:
+        content = content[:app.config['MAX_MESSAGE_LENGTH']]
     
     # Remove potentially dangerous characters but keep basic formatting
     # Allow letters, numbers, spaces, basic punctuation, and common symbols
@@ -66,8 +66,14 @@ def api_chats():
             # Simple validation and sanitization
             if title:
                 title = html.escape(title.strip(), quote=True)
-                if len(title) > 200:
-                    return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
+                if len(title) > app.config['MAX_TITLE_LENGTH']:
+                    error = StandardError(
+                    error_type=ErrorType.VALIDATION_ERROR,
+                    message="Title too long",
+                    user_message=f'Titol je príliš dlhý (max {app.config["MAX_TITLE_LENGTH"]} znakov)',
+                    status_code=400
+                )
+                return jsonify(error.to_dict()), error.status_code
             
             chat = ChatOperations.create_chat(current_user.id, title)
             return jsonify({
@@ -126,16 +132,34 @@ def api_chat_detail(chat_id):
         try:
             data = request.get_json()
             if not data:
-                return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+                error = StandardError(
+                    error_type=ErrorType.VALIDATION_ERROR,
+                    message="Missing request data",
+                    user_message='Chýbajú dáta v požiadavke',
+                    status_code=400
+                )
+                return jsonify(error.to_dict()), error.status_code
             
             title = data.get('title', '').strip()
             if not title:
-                return jsonify({'error': 'Chýba titol'}), 400
+                error = StandardError(
+                    error_type=ErrorType.VALIDATION_ERROR,
+                    message="Missing title",
+                    user_message='Chýba titol',
+                    status_code=400
+                )
+                return jsonify(error.to_dict()), error.status_code
             
             # Sanitize title
             title = html.escape(title, quote=True)
-            if len(title) > 200:
-                return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
+            if len(title) > app.config['MAX_TITLE_LENGTH']:
+                error = StandardError(
+                    error_type=ErrorType.VALIDATION_ERROR,
+                    message="Title too long",
+                    user_message=f'Titol je príliš dlhý (max {app.config["MAX_TITLE_LENGTH"]} znakov)',
+                    status_code=400
+                )
+                return jsonify(error.to_dict()), error.status_code
             
             chat = ChatOperations.update_chat_title(chat_id, current_user.id, title)
             if chat:
@@ -160,20 +184,44 @@ def api_bulk_delete_chats():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Missing request data",
+                user_message='Chýbajú dáta v požiadavke',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
         chat_ids = data.get('chat_ids', [])
         if not chat_ids or not isinstance(chat_ids, list):
-            return jsonify({'error': 'Chýba zoznam chat_ids'}), 400
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Missing or invalid chat_ids",
+                user_message='Chýba zoznam chat_ids',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
         # Validate that all chat_ids are integers
         try:
             chat_ids = [int(chat_id) for chat_id in chat_ids]
         except (ValueError, TypeError):
-            return jsonify({'error': 'Neplatné chat_ids - musia byť čísla'}), 400
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Invalid chat_ids format",
+                user_message='Neplatné chat_ids - musia byť čísla',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
-        if len(chat_ids) > 100:  # Reasonable limit
-            return jsonify({'error': 'Príliš veľa chatov na vymazanie naraz (max 100)'}), 400
+        if len(chat_ids) > app.config['MAX_BULK_DELETE_LIMIT']:
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Too many chats to delete",
+                user_message=f'Príliš veľa chatov na vymazanie naraz (max {app.config["MAX_BULK_DELETE_LIMIT"]})',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
         # Delete chats one by one and count successful deletions
         deleted_count = 0
@@ -219,24 +267,36 @@ def api_send_message():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Missing request data",
+                user_message='Chýbajú dáta v požiadavke',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
         # Simple validation and sanitization
         chat_id = data.get('chat_id')
         raw_message_content = data.get('message', '')
-        model_name = data.get('model', 'gpt-oss:20b')
+        model_name = data.get('model', app.config['DEFAULT_MODEL_NAME'])
         use_internet_search = data.get('use_internet_search', False)
         
         # Sanitize the message content
         message_content = sanitize_message_content(raw_message_content)
         
         if not chat_id or not message_content:
-            return jsonify({'error': 'Chýba chat_id alebo message'}), 400
+            error = StandardError(
+                error_type=ErrorType.VALIDATION_ERROR,
+                message="Missing chat_id or message",
+                user_message='Chýba chat_id alebo message',
+                status_code=400
+            )
+            return jsonify(error.to_dict()), error.status_code
         
         # Verify user owns the chat
         chat = ChatOperations.get_chat_by_id(chat_id, current_user.id)
         if not chat:
-            return jsonify({'error': 'Chat nenájdený alebo nemáte oprávnenie'}), 404
+            return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
         # Save user message
         user_message = MessageOperations.add_message(
             chat_id=chat_id,
@@ -248,7 +308,7 @@ def api_send_message():
         user_settings = SettingsOperations.get_user_settings(current_user.id)
         
         # Prepare conversation history for context
-        recent_messages = MessageOperations.get_latest_messages(chat_id, limit=10)
+        recent_messages = MessageOperations.get_latest_messages(chat_id, limit=app.config['CONVERSATION_HISTORY_LIMIT'])
         conversation = []
         
         # Add recent messages to conversation (reverse order for chronological)
@@ -259,18 +319,15 @@ def api_send_message():
                 "content": msg.content
             })
         
-        # Handle internet search if requested (temporarily disabled)
-        final_message = message_content
-        
+        # Note: Internet search functionality has been removed for code simplicity
+        # The use_internet_search parameter is ignored for now
         if use_internet_search:
-            # Search temporarily disabled for debugging
-            app.logger.info("Internet search requested but temporarily disabled")
-            final_message = f"[Internet search temporarily disabled] {message_content}"
+            app.logger.info("Internet search functionality not available")
         
         # Add current user message
         conversation.append({
             "role": "user", 
-            "content": final_message
+            "content": message_content
         })
         
         # Send to OLLAMA using context manager to ensure session cleanup
@@ -287,9 +344,10 @@ def api_send_message():
         )
         
         # Update chat title if it's the first message
-        if not chat.title and len(chat.messages) <= 2:  # User + AI message
+        if not chat.title and len(chat.messages) <= app.config['AUTO_TITLE_MESSAGE_LIMIT']:  # User + AI message
             # Generate title from first user message
-            title = message_content[:50] + "..." if len(message_content) > 50 else message_content
+            max_length = app.config['AUTO_TITLE_MAX_LENGTH']
+            title = message_content[:max_length] + "..." if len(message_content) > max_length else message_content
             ChatOperations.update_chat_title(chat_id, current_user.id, title)
         
         return jsonify({
@@ -313,14 +371,13 @@ def api_send_message():
         })
         
     except OllamaConnectionError as e:
-        app.logger.error(f"OLLAMA connection error: {e}")
-        return jsonify({
-            'error': f'Chyba komunikácie s AI: {str(e)}'
-        }), 500
+        return ErrorHandler.external_service_error(
+            "OLLAMA server",
+            e,
+            f'Chyba komunikácie s AI: {str(e)}'
+        )
     except Exception as e:
-        app.logger.error(f"Unexpected error in chat: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'error': f'Neočakávaná chyba: {str(e)}'
-        }), 500
+        return ErrorHandler.internal_error(
+            e,
+            "Neočakávaná chyba pri spracovaní správy"
+        )

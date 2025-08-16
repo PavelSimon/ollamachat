@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from forms import LoginForm, RegisterForm
 from database_operations import UserOperations
@@ -21,8 +21,9 @@ def login():
         
         # Ensure minimum processing time to prevent timing attacks
         elapsed = time.time() - start_time
-        if elapsed < 0.1:  # Minimum 100ms
-            time.sleep(0.1 - elapsed)
+        delay = current_app.config['AUTH_TIMING_DELAY']
+        if elapsed < delay:  # Minimum delay to prevent timing attacks
+            time.sleep(delay - elapsed)
         
         if user:
             # Clear existing session data to prevent session fixation

@@ -25,8 +25,11 @@ def validate_ollama_host(host_url):
             return False, "URL musí začínať http:// alebo https://"
             
         # Check for basic validity
-        if len(host_url) > 500:
-            return False, "URL je príliš dlhá (max 500 znakov)"
+        # Import current_app to access config
+        from flask import current_app
+        max_length = current_app.config['MAX_URL_LENGTH']
+        if len(host_url) > max_length:
+            return False, f"URL je príliš dlhá (max {max_length} znakov)"
             
         return True, None
     except Exception:
