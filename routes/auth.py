@@ -9,6 +9,21 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    Handle user login with timing attack protection.
+    
+    GET: Display login form
+    POST: Process login credentials and authenticate user
+    
+    Features:
+    - Timing attack protection with minimum processing delay
+    - Session fixation prevention
+    - Redirect prevention for security
+    
+    Returns:
+        GET: Rendered login template
+        POST: Redirect to chat page on success, login page with error on failure
+    """
     if current_user.is_authenticated:
         return redirect(url_for('main.chat'))
     
@@ -44,6 +59,21 @@ def login():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
+    """
+    Handle user registration.
+    
+    GET: Display registration form
+    POST: Process new user registration with validation
+    
+    Features:
+    - Email uniqueness validation
+    - Strong password requirement (handled by forms.py)
+    - Automatic user settings creation
+    
+    Returns:
+        GET: Rendered registration template
+        POST: Redirect to login page on success, registration page with error on failure
+    """
     if current_user.is_authenticated:
         return redirect(url_for('main.chat'))
     
@@ -61,6 +91,17 @@ def register():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    """
+    Handle user logout with session cleanup.
+    
+    Features:
+    - Complete session data clearing for security
+    - Flask-Login logout handling
+    - Success message display
+    
+    Returns:
+        Redirect to login page with success message
+    """
     # Clear all session data on logout for security
     session.clear()
     logout_user()

@@ -9,13 +9,28 @@ import re
 
 chat_bp = Blueprint('chat', __name__)
 
-# Import limiter after app initialization
 def get_limiter():
     from app import get_limiter
     return get_limiter()
 
 def sanitize_message_content(content):
-    """Sanitize user message content for security"""
+    """
+    Sanitize user message content for security and length limits.
+    
+    Args:
+        content (str): Raw user input message content
+        
+    Returns:
+        str: Sanitized content with:
+            - Whitespace trimmed
+            - Length limited to MAX_MESSAGE_LENGTH
+            - Dangerous characters filtered out
+            - HTML escaped for XSS prevention
+            
+    Note:
+        Allows basic formatting characters and common symbols while
+        removing potentially dangerous input.
+    """
     if not content:
         return content
     
@@ -35,12 +50,40 @@ def sanitize_message_content(content):
     
     return content
 
-# Simplified - removed complex pooling for now
 
 @chat_bp.route('/api/chats', methods=['GET', 'POST'])
 @login_required
 def api_chats():
-    """API endpoint for chat management"""
+    """
+    Chat management API endpoint.
+    
+    GET: Retrieve all user's chats with message counts
+    POST: Create a new chat with optional title
+    
+    GET Returns:
+        JSON response:
+        - chats (list): Array of chat objects with:
+          - id (int): Chat ID
+          - title (str): Chat title or auto-generated from first message
+          - created_at (str): ISO timestamp
+          - message_count (int): Number of messages in chat
+          
+    POST Request Body:
+        - title (str, optional): Chat title (max MAX_TITLE_LENGTH chars)
+        
+    POST Returns:
+        JSON response:
+        - id (int): New chat ID
+        - title (str): Chat title
+        - created_at (str): ISO timestamp
+        - message_count (int): Always 0 for new chats
+        
+    Status Codes:
+        200: GET successful
+        201: POST successful (chat created)
+        400: Validation error (title too long, invalid data)
+        500: Internal server error
+    """
     if request.method == 'GET':
         # Get all user chats with message counts in single query (prevents N+1)
         chats_with_counts = ChatOperations.get_user_chats_with_message_counts(current_user.id)

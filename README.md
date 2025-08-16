@@ -115,6 +115,19 @@ Aplikácia má minimálne logovania (len chyby):
 
 ## Vývoj
 
+### Automatická konfigurácia
+```bash
+# Automatická konfigurácia development prostredia
+uv run python setup-dev.py
+
+# Spustenie development servera s auto-restart funkciou
+uv run python dev.py
+
+# Kontrola development prostredia
+uv run python check-dev-env.py
+```
+
+### Manuálna konfigurácia
 ```bash
 # Inštalácia dev závislostí
 uv sync --dev
@@ -130,9 +143,6 @@ uv run python tests/test_ollama_integration.py http://your-server:11434
 
 # Validácia konfigurácie
 uv run python validate_config.py
-
-# Migrácia databázy (pridanie výkonnostných indexov)
-uv run python migrate_database.py
 ```
 
 ### Typy testov
@@ -158,28 +168,36 @@ docker-compose up -d
 
 ## Funkcie
 
-- ✅ Používateľská autentifikácia (registrácia/prihlásenie)
-- ✅ Správa chatov (vytvorenie, mazanie, história)
-- ✅ Komunikácia s OLLAMA modelmi
-- ✅ Konfigurovateľný OLLAMA server
-- ✅ Responzívne webové rozhranie
-- ✅ Bezpečné ukladanie dát (SQLite)
-- ✅ Real-time chat rozhranie
-- ✅ Model selection (výber AI modelu)
-- ✅ Organizovaný CSS a JavaScript (static/css/, static/js/)
-- ✅ Rozšírené timeout handling pre pomalé modely
-- ✅ Diagnostické nástroje a integration testy
-- ✅ Internet search integration (DuckDuckGo + Wikipedia)
-- ✅ Toggle switch pre zapnutie/vypnutie internetového vyhľadávania
-- ✅ Comprehensive input validation pre všetky API endpointy
-- ✅ Databázové indexy pre optimalizovaný výkon
-- ✅ Rate limiting pre ochranu pred DoS útokmi
-- ✅ Centralizované error handling s konzistentným JSON formátom
-- ✅ Connection pooling pre OLLAMA klientov s automatickým cleanup
-- ✅ Response caching pre model listy s TTL (5 minút)
-- ✅ API versioning s `/api/v1/` namespace pre budúcu kompatibilitu
-- ✅ Strukturované JSON logovania s automatickou rotáciou súborov
-- ✅ Health check endpointy pre monitoring systému
-- ✅ Real-time OLLAMA server version display v užívateľskom rozhraní
-- ✅ Pokročilé request tracking s correlation IDs
-- ✅ Optimalizované UI s kompaktným layoutom (167px šírka)
+### Základné funkcie
+- ✅ Používateľská autentifikácia s pokročilou bezpečnosťou (timing attack protection)
+- ✅ Správa chatov (vytvorenie, mazanie, bulk delete, história)  
+- ✅ Komunikácia s OLLAMA modelmi s kontextom posledných správ
+- ✅ Konfigurovateľný OLLAMA server pre každého používateľa
+- ✅ Responzívne webové rozhranie s markdown podporou
+- ✅ Bezpečné ukladanie dát s optimalizovanými databázovými indexami
+
+### Bezpečnosť a výkon
+- ✅ Comprehensive input validation a sanitization (XSS ochrana)
+- ✅ Rate limiting pre ochranu pred DoS útokmi (endpoint-specific)
+- ✅ Session security s CSRF ochranou a secure cookies
+- ✅ Centralizované error handling s štruktúrovanými JSON odpoveďami
+- ✅ Memory leak prevention s proper resource cleanup
+- ✅ SQLite performance optimizations (WAL mode, 64MB cache)
+- ✅ Database query optimization (eliminované N+1 queries)
+
+### Development & Monitoring
+- ✅ Development server s auto-restart funkciou (`dev.py`)
+- ✅ Automatická environment konfigurácia (`setup-dev.py`)
+- ✅ Environment validation nástroje (`check-dev-env.py`)
+- ✅ Comprehensive API dokumentácia
+- ✅ Štruktúrované JSON logovania s automatickou rotáciou súborov
+- ✅ Configuration constants pre všetky hardcoded hodnoty
+- ✅ Organized test files v `tests/` directory
+
+### API & Integration
+- ✅ Real-time OLLAMA server version display
+- ✅ Model selection s automatickým načítaním dostupných modelov
+- ✅ Context-aware conversations (posledných 10 správ)
+- ✅ Automatic chat title generation z prvej správy
+- ✅ Bulk operations pre správu chatov
+- ✅ Error handling s unique error IDs a timestamps
