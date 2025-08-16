@@ -66,7 +66,6 @@ class DevelopmentReloadHandler(FileSystemEventHandler):
                 self.last_restart = current_time
                 relative_path = Path(event.src_path).relative_to(project_root)
                 print(f"\n[CHANGED] File changed: {relative_path}")
-                print("[RESTART] Restarting development server...")
                 self.restart_callback()
 
 class DevelopmentServer:
@@ -83,7 +82,7 @@ class DevelopmentServer:
         
         # Set development environment
         os.environ['FLASK_ENV'] = 'development'
-        os.environ['FLASK_DEBUG'] = '1'
+        os.environ['FLASK_DEBUG'] = '0'  # Disable Flask's built-in reloader since we're using watchdog
         
         # Enable console logging for development
         os.environ['LOG_TO_CONSOLE'] = 'true'
@@ -156,17 +155,9 @@ class DevelopmentServer:
         
         print("[START] Starting Flask development server...")
         
-        # Use uvrun to start the app in development mode
+        # Use a simpler approach to start the Flask app
         cmd = [
-            sys.executable, '-c',
-            '''
-import os
-os.environ["FLASK_ENV"] = "development"
-os.environ["LOG_TO_CONSOLE"] = "true"
-from app import app, init_db
-init_db()
-app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
-            '''
+            sys.executable, 'app.py'
         ]
         
         try:
@@ -176,8 +167,16 @@ app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
-                bufsize=1
+                bufsize=1,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
             )
+            
+            # Wait a moment to check if process started successfully
+            time.sleep(0.5)
+            if self.process.poll() is not None:
+                print(f"[ERROR] Flask server exited immediately with code {self.process.returncode}")
+                return False
+                
             print("[OK] Flask server started successfully")
             print("[SERVER] Server running at: http://127.0.0.1:5000")
             print("[INFO] Auto-restart enabled - modify files to trigger restart")
@@ -191,14 +190,29 @@ app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
         """Stop the Flask development server"""
         if self.process:
             print("[STOP]  Stopping Flask server...")
-            self.process.terminate()
             try:
-                self.process.wait(timeout=5)
+                if sys.platform == "win32":
+                    # On Windows, send CTRL_BREAK_EVENT to the process group
+                    import signal
+                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    self.process.terminate()
+                    
+                # Wait for graceful shutdown
+                self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
-                print("[RESTART] Force killing Flask server...")
+                print("[KILL]  Force killing Flask server...")
                 self.process.kill()
                 self.process.wait()
-            self.process = None
+            except Exception as e:
+                print(f"[WARNING] Error stopping server: {e}")
+                try:
+                    self.process.kill()
+                    self.process.wait()
+                except:
+                    pass
+            finally:
+                self.process = None
     
     def setup_file_watcher(self):
         """Setup file system watcher for auto-restart"""
@@ -227,9 +241,11 @@ app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
     def restart_server(self):
         """Restart the Flask server"""
         if not self.should_exit:
+            print("[RESTART] Restarting Flask server...")
             self.stop_flask_server()
-            time.sleep(0.5)  # Brief pause
-            self.start_flask_server()
+            time.sleep(1)  # Brief pause to ensure clean shutdown
+            if not self.should_exit:  # Check again in case of interrupt during restart
+                self.start_flask_server()
     
     def run(self):
         """Main development server run loop"""
@@ -255,13 +271,30 @@ app.run(debug=True, host="127.0.0.1", port=5000, use_reloader=False)
             return 1
         
         try:
-            # Monitor server output
-            if self.process:
-                for line in iter(self.process.stdout.readline, ''):
-                    if line:
-                        print(line.rstrip())
-                    if self.process.poll() is not None:
-                        break
+            # Keep the main process alive and monitor for restarts
+            while not self.should_exit:
+                if self.process and self.process.poll() is None:
+                    # Process is running, read output if available
+                    try:
+                        line = self.process.stdout.readline()
+                        if line:
+                            print(line.rstrip())
+                    except (ValueError, AttributeError):
+                        # Handle case when process is restarted
+                        pass
+                elif self.process and self.process.poll() is not None:
+                    # Process has exited, check if we should restart
+                    if not self.should_exit:
+                        print("[WARNING] Flask server exited unexpectedly, restarting...")
+                        time.sleep(1)
+                        self.start_flask_server()
+                else:
+                    # No process running
+                    time.sleep(0.1)
+                
+                # Small delay to prevent busy waiting
+                time.sleep(0.01)
+                
         except KeyboardInterrupt:
             print("\n[STOP]  Shutting down development server...")
             self.should_exit = True
