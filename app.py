@@ -48,15 +48,13 @@ from routes.main import main_bp
 from routes.settings import settings_bp
 from routes.chat import chat_bp
 
-# Import legacy API and new v1 API
+# Import API routes
 from routes.api import api_bp  # Legacy API from routes/api.py
-from routes.api_versions.v1 import api_v1_bp  # New v1 API
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(main_bp)
 app.register_blueprint(settings_bp)
-app.register_blueprint(api_bp)  # Legacy API endpoints
-app.register_blueprint(api_v1_bp)  # New v1 API endpoints
+app.register_blueprint(api_bp)  # API endpoints
 app.register_blueprint(chat_bp)
 
 # Apply rate limiting to specific endpoints after blueprint registration
@@ -68,15 +66,7 @@ limiter.limit("20 per minute")(app.view_functions['chat.api_send_message'])
 limiter.limit("30 per minute")(app.view_functions['api.get_models'])
 limiter.limit("10 per minute")(app.view_functions['api.test_connection'])
 
-# API v1 endpoints (enhanced rate limits)
-if 'api_v1.get_models' in app.view_functions:
-    limiter.limit("50 per minute")(app.view_functions['api_v1.get_models'])
-if 'api_v1.test_ollama_connection' in app.view_functions:
-    limiter.limit("15 per minute")(app.view_functions['api_v1.test_ollama_connection'])
-if 'api_v1.get_chats' in app.view_functions:
-    limiter.limit("100 per minute")(app.view_functions['api_v1.get_chats'])
-if 'api_v1.create_chat' in app.view_functions:
-    limiter.limit("20 per minute")(app.view_functions['api_v1.create_chat'])
+# Removed unused v1 API rate limiting
 
 # Auth endpoints (more restrictive)
 limiter.limit("5 per minute")(app.view_functions['auth.login'])
@@ -141,4 +131,6 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True)
+    # Only enable debug mode in development environment
+    debug_mode = os.environ.get('FLASK_ENV', 'production') == 'development'
+    app.run(debug=debug_mode)

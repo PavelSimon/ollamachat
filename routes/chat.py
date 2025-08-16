@@ -2,7 +2,6 @@ from flask import Blueprint, jsonify, request, current_app as app
 from flask_login import login_required, current_user
 from database_operations import ChatOperations, MessageOperations, SettingsOperations
 from ollama_client import OllamaClient, OllamaConnectionError
-# from search_service import search_service  # Temporarily disabled
 from error_handlers import ErrorHandler
 from rate_limiting import api_rate_limit, RateLimits
 
@@ -39,17 +38,19 @@ def api_chats():
         # Create new chat
         try:
             data = request.get_json() or {}
-            validated_data = validate_request_data(ChatCreateSchema, data)
+            title = data.get('title')
             
-            chat = ChatOperations.create_chat(current_user.id, validated_data['title'])
+            # Simple validation
+            if title and len(title) > 200:
+                return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
+            
+            chat = ChatOperations.create_chat(current_user.id, title)
             return jsonify({
                 'id': chat.id,
                 'title': chat.get_title(),
                 'created_at': chat.created_at.isoformat(),
                 'message_count': 0
             }), 201
-        except ValidationError as e:
-            return jsonify(create_validation_error_response(e)[0]), 400
         except Exception as e:
             return ErrorHandler.internal_error(
                 e,
@@ -102,9 +103,13 @@ def api_chat_detail(chat_id):
             if not data:
                 return jsonify({'error': 'Chýbajú dáta v požiadavke'}), 400
             
-            validated_data = validate_request_data(ChatUpdateSchema, data)
+            title = data.get('title', '').strip()
+            if not title:
+                return jsonify({'error': 'Chýba titol'}), 400
+            if len(title) > 200:
+                return jsonify({'error': 'Titol je príliš dlhý (max 200 znakov)'}), 400
             
-            chat = ChatOperations.update_chat_title(chat_id, current_user.id, validated_data['title'])
+            chat = ChatOperations.update_chat_title(chat_id, current_user.id, title)
             if chat:
                 return jsonify({
                     'id': chat.id,
@@ -113,8 +118,12 @@ def api_chat_detail(chat_id):
                 })
             else:
                 return ErrorHandler.not_found("Chat", "Chat nenájdený alebo nemáte oprávnenie")
-        except ValidationError as e:
-            return jsonify(create_validation_error_response(e)[0]), 400
+        except Exception as e:
+            return ErrorHandler.internal_error(
+                e,
+                f"updating chat {chat_id} for user {current_user.id}",
+                "Chyba pri aktualizácii chatu"
+            )
 
 @chat_bp.route('/api/messages', methods=['POST'])
 @login_required
