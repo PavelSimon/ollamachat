@@ -45,13 +45,18 @@ def mock_chat_response():
         "eval_count": 25
     }
 
-def test_ollama_client_initialization():
+def test_ollama_client_initialization(monkeypatch):
     """Test OllamaClient initialization"""
+    monkeypatch.delenv("DEFAULT_OLLAMA_HOST", raising=False)
     client = OllamaClient()
-    assert client.base_url == "http://192.168.1.23:11434"
-    
+    assert client.base_url == "http://localhost:11434"
+
     client_custom = OllamaClient("http://localhost:11434/")
     assert client_custom.base_url == "http://localhost:11434"
+
+    monkeypatch.setenv("DEFAULT_OLLAMA_HOST", "http://custom-host:11434")
+    client_env = OllamaClient()
+    assert client_env.base_url == "http://custom-host:11434"
 
 @patch('requests.Session.get')
 def test_connection_success(mock_get, ollama_client):

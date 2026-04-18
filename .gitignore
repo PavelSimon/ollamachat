@@ -24,6 +24,12 @@ instance/*
 logs/
 *.log
 
+# Test / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
 #node files
 node_modules/
 

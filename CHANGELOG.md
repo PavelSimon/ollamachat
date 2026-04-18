@@ -5,7 +5,29 @@ Forward-looking work is tracked in `DEVELOPMENT_PLAN.md`.
 
 ---
 
-## 2026-04-18 — Documentation sync
+## 2026-04-18 — Test baseline & coverage tooling (plan task 0.2)
+
+- Added `pytest-cov>=5.0.0` to dev dependencies; coverage config in `pyproject.toml` (source, omit patterns, exclude lines).
+- Added `tests/conftest.py` with a shared `client` fixture that disposes the SQLAlchemy engine between tests — previously each test file had its own fixture and the engine was cached with a stale URI, causing cross-test DB pollution.
+- Updated test credentials to comply with the current password policy (uppercase + special char) and switched hardcoded `192.168.1.23:11434` assertions to `localhost` or env-var-driven values so the suite is not tied to one developer's `.env`.
+- Replaced `Mock()` with `MagicMock()` in `tests/test_settings.py` where the route uses `OllamaClient` as a context manager; `logged_in_user` fixture now returns a dict of primitive values to avoid `DetachedInstanceError`.
+- Aligned expected status codes with the current `ErrorHandler` contract: `external_service_error` → 503, `internal_error` → 500.
+- Added `Makefile` with `test`, `test-cov`, `dev`, `check-config` targets.
+
+**Baseline coverage (2026-04-18):** 66% overall, 38 tests passing, 0 failing.
+Per-module hot spots for future work:
+
+| Module | Coverage | Notes |
+|--------|---------:|-------|
+| `routes/chat.py` | 14% | bulk-delete, send-message, chat CRUD untested |
+| `routes/settings.py` | 43% | `validate_ollama_host` and `api_settings` PUT untested |
+| `rate_limiting.py` | 46% | decorator wiring untested |
+| `ollama_client.py` | 66% | streaming, version, error paths |
+| `error_handlers.py` | 72% | `register_error_handlers` error-branch paths |
+
+Integration tests (`tests/test_ollama_integration.py`) remain excluded from the default run (they require a live OLLAMA server) — they still run via `uv run python tests/test_ollama_integration.py`.
+
+## 2026-04-18 — Documentation sync (plan task 0.1)
 
 - Rewrote `CLAUDE.md` to match the actual codebase (removed false claims about `ollama_pool.py`, `response_cache.py`, and `routes/api_versions/` which were never implemented).
 - Consolidated per-phase `*_COMPLETED.md` files into this changelog; originals moved to `docs/archive/`.

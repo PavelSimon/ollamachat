@@ -22,6 +22,7 @@ dependencies = [
 dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-flask>=1.2.0",
+    "pytest-cov>=5.0.0",
     "watchdog>=3.0.0",
 ]
 
@@ -31,3 +32,32 @@ dev-dependencies = [
 production = [
     "gunicorn>=21.2.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# test_ollama_integration.py is a standalone script that requires a live
+# OLLAMA server; skip it from automatic discovery.
+addopts = "--ignore=tests/test_ollama_integration.py"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    ".venv/*",
+    "migrate_database.py",
+    "validate_config.py",
+    "dev.py",
+    "setup-dev.py",
+    "check-dev-env.py",
+    "logs/*",
+    "docs/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_covered = false
