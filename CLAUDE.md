@@ -4,331 +4,217 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OLLAMA Chat is a Flask-based web application that provides a chat interface for communicating with local OLLAMA AI models. The application features user authentication, chat management, and real-time AI conversations.
+OLLAMA Chat is a Flask-based web application that provides a chat interface for communicating with local OLLAMA AI models. It has user authentication, per-user chat management, and synchronous (non-streaming) AI conversations.
 
 **Key Technologies:**
-- Flask web framework with blueprints architecture
-- SQLite database with SQLAlchemy ORM
-- uv for Python dependency management (requires Python 3.13+)
-- Flask-Login for user session management
-- Flask-WTF for forms and CSRF protection
-- Vanilla JavaScript frontend with markdown rendering
+- Flask 2.3 with blueprints architecture
+- SQLite (dev) via SQLAlchemy 3.0 ORM — PostgreSQL supported via `DATABASE_URL`
+- `uv` for Python dependency management (requires Python 3.13+)
+- Flask-Login for session management
+- Flask-WTF + WTForms for forms and CSRF protection
+- Flask-Limiter for rate limiting (memory backend by default)
+- Werkzeug password hashing (scrypt/pbkdf2 depending on Werkzeug version)
+- Vanilla JavaScript frontend with custom markdown rendering
+
+See `DEVELOPMENT_PLAN.md` for the active improvement plan.
 
 ## Development Commands
 
 **Environment Setup:**
 ```bash
-# Copy and configure environment
-cp .env.example .env
-
-# Install dependencies
-uv sync
-
-# Install with development dependencies
-uv sync --dev
-
-# Start development server
-uv run app.py
-
-# Alternative with virtual environment
-uv venv && source .venv/bin/activate  # .venv\Scripts\activate on Windows
-uv pip install -e .
-python app.py
+cp .env.example .env                # configure environment
+uv sync                             # install dependencies
+uv sync --dev                       # include dev deps (pytest, watchdog)
+uv run app.py                       # start dev server
 ```
 
 **Testing:**
 ```bash
-# Run all tests
-uv run pytest
-
-# Run integration tests with real OLLAMA server
-uv run python tests/test_ollama_integration.py
-
-# Run integration tests with custom server
-uv run python tests/test_ollama_integration.py http://your-server:11434
+uv run pytest                                            # all unit tests
+uv run python tests/test_ollama_integration.py          # real OLLAMA server
+uv run python tests/test_ollama_integration.py URL      # custom server
 ```
 
-**Configuration Validation:**
+**Configuration & maintenance:**
 ```bash
-# Validate environment configuration
-uv run python validate_config.py
-
-# Generate secure SECRET_KEY
-python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
-
-# Migrate database (add performance indexes)
-uv run python migrate_database.py
+uv run python validate_config.py                         # validate env
+python -c "import secrets; print(secrets.token_hex(32))" # generate SECRET_KEY
+uv run python migrate_database.py                        # apply index migrations
 ```
 
-**Production Deployment:**
+**Production:**
 ```bash
-# Production with gunicorn
 uv sync --extra production
 uv run gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
-
-# Docker deployment
-cp .env.example .env  # Configure first
+# or:
 docker-compose up -d
-
-# Database initialization
-uv run python -c "from app import init_db; init_db()"
 ```
 
 ## Architecture Overview
 
-### Application Structure
+### Top-level layout
 ```
-app.py                 # Flask application factory, blueprint registration
-config.py              # Environment-based configuration classes
-models.py              # SQLAlchemy database models
-database_operations.py # Database operation abstractions
-ollama_client.py       # OLLAMA API client wrapper
-forms.py              # WTForms form definitions
-routes/               # Flask blueprints for different functionality
+app.py                    # Flask app factory, blueprint registration, security headers
+config.py                 # Env-based config (Development/Production/Testing)
+models.py                 # SQLAlchemy models (User, UserSettings, Chat, Message)
+database_operations.py    # CRUD abstraction classes
+ollama_client.py          # OLLAMA HTTP client (context-managed requests.Session)
+error_handlers.py         # Centralized ErrorHandler + StandardError
+enhanced_logging.py       # Structured JSON logging with rotation
+rate_limiting.py          # Flask-Limiter wrapper with predefined limits
+forms.py                  # WTForms definitions
+validate_config.py        # Env validator
+migrate_database.py       # One-shot index migration script
+routes/                   # Flask blueprints (auth, main, chat, settings, api)
+templates/ · static/      # Jinja2 templates + vanilla JS/CSS
+tests/                    # pytest unit + integration tests
+logs/                     # Rotated JSON logs (app, access, errors, performance)
 ```
 
-### Database Design
-The application uses four main models:
-- **User**: Authentication and user management with bcrypt password hashing
-- **UserSettings**: Per-user configuration (OLLAMA server host)  
-- **Chat**: Chat conversation containers with auto-generated titles
-- **Message**: Individual messages with user/AI distinction and model tracking
+### Blueprints
+| Blueprint | File | Purpose |
+|-----------|------|---------|
+| `auth_bp` | `routes/auth.py` | `/login`, `/register`, `/logout` + timing-attack protection |
+| `main_bp` | `routes/main.py` | `/`, `/chat` page routing |
+| `chat_bp` | `routes/chat.py` | `/api/chats`, `/api/chats/<id>`, `/api/chats/bulk-delete`, `/api/messages` |
+| `settings_bp` | `routes/settings.py` | `/settings` + `/api/settings` |
+| `api_bp` | `routes/api.py` | `/api/models`, `/api/test-connection` (OLLAMA proxy) |
 
-### Blueprint Organization
-- `auth_bp`: User registration, login, logout (`routes/auth.py`)
-- `main_bp`: Index and chat page routing (`routes/main.py`)  
-- `chat_bp`: Chat CRUD operations and AI message handling (`routes/chat.py`)
-- `api_bp`: OLLAMA server connection testing and model listing (`routes/api.py`)
-- `settings_bp`: User settings management (`routes/settings.py`)
+Rate limits are applied in `app.py` after blueprint registration (see `limiter.limit(...)` calls).
 
-### Frontend Architecture
-- **Static Assets**: Organized in `static/css/` and `static/js/`
-- **Templates**: Jinja2 templates with base template inheritance
-- **JavaScript**: Vanilla JS with fetch API for AJAX calls
-- **Markdown Rendering**: Custom client-side implementation with XSS protection
-- **Real-time UI**: Manual refresh pattern (no WebSockets currently)
+### Database models
+- **User** — email + password_hash (Werkzeug), cascade to chats/settings
+- **UserSettings** — per-user OLLAMA host
+- **Chat** — conversation container with indexes `idx_chats_user_updated` and `idx_chats_user_created`
+- **Message** — indexes `idx_messages_chat_created` and `idx_messages_chat_user`
 
-## Key Configuration Points
+No formal migration system yet — `db.create_all()` runs on startup in dev. Production schema changes are manual (see `migrate_database.py` for the index migration pattern).
 
-### Environment Variables (Required)
-- `SECRET_KEY`: Cryptographic key for sessions/CSRF (auto-generated in development)
-- `FLASK_ENV`: Application environment (`development`/`production`/`testing`)
-- `DATABASE_URL`: Database connection string (defaults to SQLite)
-- `DEFAULT_OLLAMA_HOST`: Default OLLAMA server URL (defaults to `http://localhost:11434`)
+### OLLAMA integration
+- Each user configures their own OLLAMA host (`UserSettings.ollama_host`)
+- `OllamaClient` is instantiated per-request via `with OllamaClient(host) as client:` — no connection pool currently
+- Supported operations: `get_models()`, `get_version()`, `chat()`, `generate()` (streaming also supported but not wired into routes yet)
+- Extended timeout (120s) for slow model responses — blocks the worker for the duration
+- Conversation context: last `CONVERSATION_HISTORY_LIMIT` messages (default 10)
 
-### Security Considerations
-- Production requires explicit SECRET_KEY in environment
-- CSRF protection enabled by default via Flask-WTF
-- Session cookies configured with security headers
-- Input validation through WTForms
-- XSS protection in markdown rendering
+### Frontend
+- Jinja2 templates in `templates/`, base template inheritance
+- Vanilla JS in `static/js/` — fetch API, CSRF via form tokens (not yet applied to JSON endpoints)
+- Custom markdown renderer in `chat.js` (regex-based; `node_modules/` contains marked but it's not wired in)
+- No WebSockets or SSE — manual polling / full-response waits
 
-### OLLAMA Integration
-- Each user can configure their own OLLAMA server URL
-- Connection testing endpoint available at `/api/test-connection`
-- Model discovery via `/api/models` endpoint
-- Extended timeouts (120s) for slow model responses
-- Conversation context maintained (last 10 messages)
+## Configuration Points
+
+**Required env vars** (see `.env.example`):
+- `SECRET_KEY` — cryptographic key (auto-generated in dev, required in prod)
+- `FLASK_ENV` — `development` / `production` / `testing`
+- `DATABASE_URL` — defaults to SQLite `instance/chat.db`
+- `DEFAULT_OLLAMA_HOST` — default server URL (default `http://localhost:11434`)
+- `RATELIMIT_STORAGE_URL` — rate limiter backend (default `memory://` — per-worker!)
+- `LOG_LEVEL`, `LOG_TO_CONSOLE` — logging config
+
+**Security posture:**
+- CSRF enabled via Flask-WTF (form endpoints only — JSON API not yet protected)
+- Session cookies: `HTTPONLY`, `SECURE` in production, `SAMESITE=Lax`
+- CSP configured in `app.py` with `unsafe-inline` for script/style (to be tightened)
+- HSTS emitted when `SESSION_COOKIE_SECURE` is true
+- WTForms validation on form endpoints; `sanitize_message_content` + `html.escape` on chat messages
 
 ## Database Operations Pattern
 
-The codebase uses a clean separation with operation classes:
 ```python
-# User operations
+# Users
 user = UserOperations.create_user(email, password)
 user = UserOperations.authenticate_user(email, password)
 
-# Chat operations  
+# Chats
 chat = ChatOperations.create_chat(user_id, title=None)
 chats = ChatOperations.get_user_chats(user_id)
+chats_with_counts = ChatOperations.get_user_chats_with_message_counts(user_id)
 
-# Message operations
+# Messages
 message = MessageOperations.add_message(chat_id, content, is_user, model_name)
 messages = MessageOperations.get_chat_messages(chat_id, user_id)
+recent = MessageOperations.get_latest_messages(chat_id, limit=10)
 
-# Settings operations
+# Settings
 settings = SettingsOperations.get_user_settings(user_id)
 SettingsOperations.update_ollama_host(user_id, new_host)
 ```
 
-## Testing Strategy
+Always go through these classes — avoid raw SQLAlchemy in route handlers. Ownership checks (via `user_id`) are enforced inside the operations.
 
-**Unit Tests**: Mock-based testing in `tests/test_*.py`
-- Database operations testing
-- Authentication flow testing  
-- OLLAMA client mocking
-- Settings management testing
+## Testing
 
-**Integration Tests**: Real OLLAMA server testing in `test_ollama_integration.py`
-- Requires running OLLAMA server
-- Tests actual model communication
-- Configurable OLLAMA server endpoint
+**Unit tests** in `tests/test_*.py` — mock-based:
+- `test_auth.py` — registration, login, logout
+- `test_database.py` — CRUD on models
+- `test_ollama.py` — `OllamaClient` with mocked HTTP
+- `test_settings.py` — user settings CRUD
+
+**Integration tests** in `tests/test_ollama_integration.py` — requires a live OLLAMA server, configurable endpoint.
+
+No coverage tooling wired in yet — adding `pytest-cov` is tracked in `DEVELOPMENT_PLAN.md` (task 0.2).
 
 ## Common Development Patterns
 
-### Adding New Routes
-1. Create route function in appropriate blueprint file
-2. Add necessary imports and decorators (@login_required for protected routes)
-3. Use database operations classes rather than direct SQLAlchemy calls
-4. Return JSON for API endpoints, render templates for pages
+### Adding a new route
+1. Place handler in the appropriate blueprint file
+2. Add `@login_required` for protected routes
+3. Use the `*Operations` classes, not raw SQLAlchemy
+4. Return JSON (`jsonify(...)`) for API, `render_template(...)` for pages
+5. Register rate limit in `app.py` if the endpoint needs one
 
-### Database Schema Changes
-1. Modify model definitions in `models.py`
-2. No formal migration system - database recreated on startup in development
-3. Production deployments require manual schema updates
+### Schema changes
+1. Edit `models.py`
+2. In dev, drop DB and let `db.create_all()` recreate
+3. In prod, write a migration script (see `migrate_database.py`) — Flask-Migrate is planned but not installed
+4. Update `database_operations.py` if new fields need accessors
 
-### Frontend JavaScript Updates
-1. Follow existing fetch() pattern for API calls
-2. Use manual error handling and user feedback
-3. Update `formatMarkdown()` function for content rendering changes
-4. Maintain CSRF token handling in forms
+### OLLAMA client extensions
+1. Add method to `OllamaClient` in `ollama_client.py`
+2. Use `OllamaConnectionError` for network/API failures (maps to `ErrorHandler.external_service_error` in routes)
+3. Keep per-request timeouts; don't set a global default
+4. Add both unit test (mocked) and integration test
 
-### OLLAMA Client Extensions
-1. Extend `OllamaClient` class in `ollama_client.py`
-2. Add appropriate error handling with `OllamaConnectionError`
-3. Use per-request timeouts rather than global timeouts
-4. Test with both unit tests (mocked) and integration tests (real server)
-
-## Improvement Implementation Priority
-
-When working on enhancements, follow this priority order:
-
-### Phase 1: Critical Security & Performance (1-2 weeks) - ✅ COMPLETED
-1. ✅ **Input Validation**: Added comprehensive Marshmallow validation to all API endpoints
-2. ✅ **Database Indexes**: Added composite indexes on `messages` and `chats` tables
-3. ✅ **Rate Limiting**: Implemented Flask-Limiter with endpoint-specific rate limits
-
-### Phase 2: Code Quality & Reliability (2-4 weeks) - ✅ COMPLETED
-1. ✅ **Error Handling**: Implemented centralized ErrorHandler class with standardized JSON error responses
-2. ✅ **Connection Pooling**: Added OLLAMA client connection pool with LRU eviction and health checking
-3. ✅ **Response Caching**: Implemented TTL-based caching for model lists with 5-minute cache duration
-
-### Phase 3: Architecture & UX Enhancements (1-3 months) - ✅ COMPLETED
-1. ✅ **API Versioning**: Implemented `/api/v1/` namespace with enhanced endpoints and request tracking
-2. ✅ **Enhanced Logging**: Added structured JSON logging with file rotation and performance monitoring
-3. ✅ **Health Monitoring**: Implemented comprehensive health check endpoints with system metrics
-4. ✅ **OLLAMA Version Display**: Added real-time OLLAMA server version information in chat interface
-5. **Real-time Features**: WebSocket support for live chat updates  
-6. **Advanced Features**: Chat export, search, categorization
-
-## Recent Implementations (Phase 3 Completed)
-
-### API Versioning System (`/api/v1/`)
-- **Structure**: Created versioned API namespace in `routes/api_versions/v1/`
-- **Endpoints**: Enhanced models, system health, chat management, and user profile endpoints
-- **Features**: Request tracking, structured responses, comprehensive error handling
-- **Monitoring**: Built-in performance metrics and request correlation IDs
-
-### Enhanced Logging System
-- **Implementation**: `enhanced_logging.py` with structured JSON logging
-- **Features**: File rotation (10MB app logs, 20MB access logs), request correlation, performance tracking
-- **Storage**: Organized in `logs/` directory with automatic cleanup and monitoring tools
-- **Configuration**: Environment-controlled console output via `LOG_TO_CONSOLE`
-
-### Connection Pooling & Caching
-- **Pool Manager**: `ollama_pool.py` with thread-safe LRU eviction and health checking
-- **Response Cache**: `response_cache.py` with TTL-based caching and decorator pattern
-- **Performance**: Reduced OLLAMA API calls and improved response times
-
-### OLLAMA Version Integration
-- **Backend**: Enhanced `ollama_client.py` with `get_version()` method
-- **API**: Updated `/api/models` endpoint to include version information
-- **Frontend**: Real-time version display in compact layout (167px) under model selector
-- **Layout**: Vertical stacking in chat header with consistent styling
-
-### Error Handling Standardization
-- **System**: Centralized `error_handlers.py` with structured JSON error responses
-- **Features**: Error IDs, timestamps, request correlation, and user-friendly messages
-- **Integration**: Applied across all routes with backward compatibility
-
-## Production Considerations
-
-- SQLite suitable for small deployments only
-- Use gunicorn for production WSGI serving
-- Configure proper logging levels via LOG_LEVEL environment variable
-- HTTPS required for secure session cookies (SESSION_COOKIE_SECURE=true)
-- Consider connection pooling for high-traffic scenarios
-
-## Known Limitations
-
-- No real-time updates (requires manual refresh)
-- No user chat sharing or collaboration features  
-- SQLite not suitable for high-concurrency production use
-- No API rate limiting implemented
-- No user data export/import functionality
-
-## Critical Technical Debt & Improvements
-
-### Security Issues (HIGH PRIORITY)
-- ✅ **Input Sanitization**: Implemented comprehensive Marshmallow validation for all API endpoints
-- ✅ **Rate Limiting**: Added Flask-Limiter with endpoint-specific limits (20/min for messages, 5/min for auth)
-- **Content Security Policy**: Missing CSP headers for XSS protection
-
-### Performance Bottlenecks
-- ✅ **Database Indexes**: Added composite indexes on `messages.chat_id+created_at` and `chats.user_id+updated_at`
-- ✅ **Connection Pooling**: Implemented OLLAMA client connection pool with LRU eviction and health checking
-- ✅ **Response Caching**: Added TTL-based caching for model lists with 5-minute cache duration
-
-### Code Quality Issues
-- ✅ **Error Handling**: Implemented centralized ErrorHandler class with standardized JSON error responses
-- **Type Hints**: Incomplete coverage - `ollama_client.py` has types, others don't
-- **Configuration**: Some hardcoded values still exist - centralize all config in `config.py`
-
-### Architectural Gaps
-- ✅ **API Versioning**: Implemented `/api/v1/` namespace with enhanced endpoints and request tracking
-- **Database Migrations**: No formal migration system - consider Flask-Migrate for production
-- ✅ **Logging**: Implemented structured JSON logging with file rotation, request IDs, and performance monitoring
+### Frontend JS
+1. Use `fetch()` with CSRF token from the form (JSON endpoints are not yet CSRF-protected)
+2. Update `formatMarkdown()` in `static/js/chat.js` for rendering changes
+3. Keep XSS escaping in mind — the custom renderer is regex-based
 
 ## Files to Modify for Common Tasks
 
-**Adding Authentication Features**: `routes/auth.py`, `forms.py`, `models.py`
-**Database Schema Changes**: `models.py`, `database_operations.py`  
-**OLLAMA Integration**: `ollama_client.py`, `routes/api.py`, `routes/chat.py`
-**Frontend UI**: `templates/*.html`, `static/css/*.css`, `static/js/*.js`
-**Configuration**: `config.py`, `.env.example`
-**Testing**: `tests/test_*.py`
-**API Versioning**: `routes/api_versions/v1/*.py`
-**Logging & Monitoring**: `enhanced_logging.py`, `logs/`
-**Error Handling**: `error_handlers.py`
-**Performance**: `ollama_pool.py`, `response_cache.py`
+- **Auth**: `routes/auth.py`, `forms.py`, `models.py`
+- **Schema**: `models.py`, `database_operations.py`, `migrate_database.py`
+- **OLLAMA**: `ollama_client.py`, `routes/api.py`, `routes/chat.py`
+- **Frontend**: `templates/*.html`, `static/css/*.css`, `static/js/*.js`
+- **Config**: `config.py`, `.env.example`
+- **Error handling**: `error_handlers.py`
+- **Rate limits**: `app.py` (applied post-registration), `rate_limiting.py` (defaults)
+- **Logging**: `enhanced_logging.py`, `logs/`
 
-## New Files Added (Phase 3 Implementation)
+## Production Considerations
 
-### Core Infrastructure
-- `enhanced_logging.py` - Structured JSON logging with file rotation
-- `error_handlers.py` - Centralized error handling with standardized responses
-- `ollama_pool.py` - OLLAMA client connection pooling with health checking
-- `response_cache.py` - TTL-based response caching system
+- **SQLite** works for single-user / low-traffic only. For concurrency use PostgreSQL via `DATABASE_URL`.
+- **Gunicorn** `--workers 4` — OLLAMA requests are I/O bound and block workers for up to 120s; consider gevent worker class for high concurrency.
+- **Rate limiter** defaults to `memory://` — each worker has its own counters. Use Redis for shared limits.
+- **HTTPS** required for `SESSION_COOKIE_SECURE`.
+- **Logs** rotate in `logs/` (10MB app, 20MB access) — see `logs/README.md`.
 
-### API Versioning Structure
-- `routes/api_versions/` - Directory for versioned API endpoints
-- `routes/api_versions/v1/base.py` - Base framework for v1 API with request tracking
-- `routes/api_versions/v1/models.py` - Enhanced model endpoints with metadata
-- `routes/api_versions/v1/system.py` - Health checks and system monitoring
-- `routes/api_versions/v1/chat.py` - Advanced chat management features
-- `routes/api_versions/v1/users.py` - User profile and settings management
+## Known Limitations
 
-### Logging Infrastructure
-- `logs/` - Log storage directory with automatic rotation
-- `logs/README.md` - Documentation for log management
-- `logs/monitor.py` - Log viewing and monitoring utilities
-- `.gitignore` - Updated to exclude log files from version control
+- No streaming AI responses — full response blocks the worker and the UI
+- Rate limiter uses in-memory backend by default (per-worker limits under gunicorn)
+- JSON API endpoints are not CSRF-protected (form endpoints are)
+- `UserSettings.ollama_host` accepts any URL — SSRF risk (no IP range / scheme whitelist)
+- CSP allows `unsafe-inline` for script/style
+- SQLite not suitable for high-concurrency production
+- No formal schema migration system (Flask-Migrate planned)
+- No user data export yet
+- No chat search
 
-## Key Files Needing Attention
+All of the above are tracked in `DEVELOPMENT_PLAN.md`.
 
-Based on the improvements analysis:
+## Change History
 
-**High Priority Fixes:**
-- ✅ `routes/api.py` - Standardized error handling with ErrorHandler class
-- ✅ `models.py` - Added database indexes on `messages.chat_id+created_at`, `chats.user_id+updated_at`
-- ✅ `static/js/chat.js:55-90` - Model loading enhanced with version display and caching
-- `static/js/chat.js:164` - Markdown rendering could use proper library instead of custom implementation
-
-**Security Enhancements:**
-- ✅ All route files in `routes/` - Added comprehensive input validation and rate limiting
-- `app.py` - Add CSP headers to security headers function
-- ✅ `config.py` - Improved with secure SECRET_KEY generation
-
-**Performance Optimizations:**
-- ✅ `ollama_client.py` - Implemented connection pooling with `ollama_pool.py`
-- ✅ `routes/api.py` and `routes/chat.py` - Added TTL-based response caching with `response_cache.py`
+Historical completion notes are consolidated in `CHANGELOG.md`.
