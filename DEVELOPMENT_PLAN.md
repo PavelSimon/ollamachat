@@ -13,7 +13,7 @@ Legenda priority: 🔴 kritická · 🟠 vysoká · 🟡 stredná · 🟢 nízka
 
 ---
 
-## Fáza 0 — Hygiena a príprava (1–2 dni)
+## Fáza 0 — Hygiena a príprava (Zdokonané)
 
 Cieľom je dostať repo do stavu, kde ďalšie zmeny vieme bezpečne overovať.
 
@@ -40,7 +40,7 @@ Cieľom je dostať repo do stavu, kde ďalšie zmeny vieme bezpečne overovať.
 
 ## Fáza 1 — Kritická bezpečnosť (3–5 dní)
 
-### 1.1 🔴 SSRF ochrana pre OLLAMA host
+### 1.1 🟢 SSRF ochrana pre OLLAMA host
 - **Cieľ**: Používateľ si môže v settings nastaviť `http://169.254.169.254/` alebo `http://127.0.0.1:22` a aplikácia z neho robí requesty zo servera. Teraz = plný SSRF.
 - **Zmeny**:
   - Nový `security/url_validator.py` s funkciou `validate_ollama_host(url) -> str`

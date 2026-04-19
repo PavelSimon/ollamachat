@@ -67,20 +67,14 @@ class SettingsForm(FlaskForm):
     ollama_host = StringField('OLLAMA Server URL', validators=[
         DataRequired(message='OLLAMA server URL je povinná'),
         Length(max=255, message='URL môže mať maximálne 255 znakov')
-    ], description='Napríklad: http://192.168.1.23:11434')
+    ], description='Napríklad: http://10.0.0.5:11434')
     submit = SubmitField('Uložiť nastavenia')
-    
+
     def validate_ollama_host(self, ollama_host):
-        """Validate OLLAMA host URL format"""
+        """Validate OLLAMA host URL format against SSRF and format rules."""
         url = ollama_host.data.strip()
-        if not url.startswith(('http://', 'https://')):
-            raise ValidationError('URL musí začínať http:// alebo https://')
-        
-        # Basic URL validation
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(url)
-            if not parsed.netloc:
-                raise ValidationError('Neplatný formát URL')
-        except Exception:
-            raise ValidationError('Neplatný formát URL')
+        from security.url_validator import validate_ollama_host as validate_ollama_host_func
+
+        is_valid, error_msg = validate_ollama_host_func(url)
+        if not is_valid:
+            raise ValidationError(error_msg)
