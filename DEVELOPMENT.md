@@ -388,6 +388,46 @@ uv run python validate_config.py
 uv run python migrate_database.py
 ```
 
+### Database Migrations
+
+The project uses **Flask-Migrate** (Alembic) for schema evolution. Migrations live in `migrations/versions/`.
+
+**Typical workflow when editing `models.py`:**
+```bash
+# 1. Edit models.py to add/change columns or tables
+# 2. Autogenerate a migration from the diff between models and the live DB
+FLASK_APP=app.py uv run flask db migrate -m "describe the change"
+# 3. Review the generated file in migrations/versions/ — autogenerate is not perfect
+# 4. Apply the migration
+FLASK_APP=app.py uv run flask db upgrade
+```
+
+**Fresh environment:**
+```bash
+FLASK_APP=app.py uv run flask db upgrade     # builds the schema from scratch
+```
+
+**Existing production DB that predates Flask-Migrate** (was created by `db.create_all()`
+and has no `alembic_version` table):
+```bash
+FLASK_APP=app.py uv run flask db stamp head  # tell Alembic the DB is already at HEAD
+FLASK_APP=app.py uv run flask db upgrade     # future migrations can now apply
+```
+
+`init_db()` in `app.py` handles the common cases automatically: it runs `upgrade()` on
+a fresh DB and stamps legacy DBs before upgrading. For most dev work, `init_db()` is
+enough; the CLI is there for more control when you need it.
+
+**Rolling back:**
+```bash
+FLASK_APP=app.py uv run flask db downgrade -1   # one revision back
+FLASK_APP=app.py uv run flask db downgrade base # to empty schema
+```
+
+The legacy `migrate_database.py` script that added performance indexes is still in the
+repo as historical reference, but the equivalent (and all future) index work should go
+through Flask-Migrate.
+
 ### Common Commands Reference
 ```bash
 # Setup
@@ -409,9 +449,13 @@ uv run pytest                        # Run all tests
 uv run pytest tests/test_auth.py     # Run specific tests
 uv run python tests/test_ollama_integration.py  # Integration tests
 
-# Database
-uv run python -c "from app import init_db; init_db()"  # Initialize
-uv run python migrate_database.py    # Migrate (if available)
+# Database migrations (Flask-Migrate / Alembic)
+FLASK_APP=app.py uv run flask db upgrade        # apply all pending migrations
+FLASK_APP=app.py uv run flask db migrate -m "msg"  # autogenerate migration from models.py
+FLASK_APP=app.py uv run flask db current        # show current revision
+FLASK_APP=app.py uv run flask db history        # list all revisions
+FLASK_APP=app.py uv run flask db stamp head     # mark legacy DB as up-to-date
+uv run python -c "from app import init_db; init_db()"  # upgrade or stamp as needed
 
 # Validation
 uv run python validate_config.py     # Check configuration

@@ -3,6 +3,7 @@ from flask_login import LoginManager
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
+from flask_migrate import Migrate
 import os
 import logging
 from models import db, User
@@ -42,6 +43,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 # Initialize extensions
 db.init_app(app)
+migrate = Migrate(app, db, render_as_batch=True)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
@@ -168,10 +170,35 @@ from enhanced_logging import setup_enhanced_logging
 setup_enhanced_logging(app)
 
 def init_db():
-    """Initialize database with tables"""
+    """Initialize database schema.
+
+    Uses Flask-Migrate (Alembic) when a migrations directory is available
+    so the tracked revision and the actual schema stay in sync. Falls back
+    to db.create_all() only when migrations are not present (e.g. in tests
+    that set up a tempfile DB without running the migration CLI).
+    """
+    from flask_migrate import upgrade as migrate_upgrade, stamp as migrate_stamp
+    from sqlalchemy import inspect
+
+    migrations_dir = os.path.join(os.path.dirname(__file__), 'migrations')
+
     with app.app_context():
-        db.create_all()
-        print("Database tables created successfully!")
+        if not os.path.isdir(migrations_dir):
+            db.create_all()
+            print("Database tables created via create_all() (no migrations dir).")
+            return
+
+        inspector = inspect(db.engine)
+        tables = set(inspector.get_table_names())
+
+        if tables and 'alembic_version' not in tables:
+            # Legacy DB that predates migrations — stamp the current head
+            # so Alembic knows it's already at the baseline schema.
+            migrate_stamp()
+            print("Legacy database stamped at current migration head.")
+        else:
+            migrate_upgrade()
+            print("Database upgraded to latest migration.")
 
 if __name__ == '__main__':
     init_db()

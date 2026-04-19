@@ -5,6 +5,17 @@ Forward-looking work is tracked in `DEVELOPMENT_PLAN.md`.
 
 ---
 
+## 2026-04-19 — Flask-Migrate for schema evolution (plan task 0.3)
+
+- Added `Flask-Migrate>=4.0.0` to dependencies; wired `Migrate(app, db, render_as_batch=True)` in `app.py` (batch mode is required for SQLite ALTER support).
+- Ran `flask db init` + `flask db migrate` to produce the baseline migration `migrations/versions/7d814cf6fe1d_initial_schema.py` capturing the current `models.py` state (4 tables, all indexes).
+- Verified `flask db upgrade` on an empty DB produces a schema identical to `db.create_all()` (only difference is the Alembic `alembic_version` tracking table).
+- `init_db()` now runs `flask db upgrade` instead of `db.create_all()`, and auto-`stamp`s legacy DBs (tables exist but no `alembic_version` row). Tests keep using `db.create_all()` via `tests/conftest.py` for speed — they don't need migration tracking.
+- `DEVELOPMENT.md`: new "Database Migrations" section with workflow, legacy-stamp instructions, rollback commands.
+- `CLAUDE.md`: updated schema-change instructions, removed "no formal migration system" from Known Limitations.
+
+`migrate_database.py` stays as historical reference but new schema work goes through Flask-Migrate.
+
 ## 2026-04-18 — Test baseline & coverage tooling (plan task 0.2)
 
 - Added `pytest-cov>=5.0.0` to dev dependencies; coverage config in `pyproject.toml` (source, omit patterns, exclude lines).

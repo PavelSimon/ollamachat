@@ -13,6 +13,7 @@ OLLAMA Chat is a Flask-based web application that provides a chat interface for 
 - Flask-Login for session management
 - Flask-WTF + WTForms for forms and CSRF protection
 - Flask-Limiter for rate limiting (memory backend by default)
+- Flask-Migrate (Alembic) for schema evolution
 - Werkzeug password hashing (scrypt/pbkdf2 depending on Werkzeug version)
 - Vanilla JavaScript frontend with custom markdown rendering
 
@@ -88,7 +89,10 @@ Rate limits are applied in `app.py` after blueprint registration (see `limiter.l
 - **Chat** — conversation container with indexes `idx_chats_user_updated` and `idx_chats_user_created`
 - **Message** — indexes `idx_messages_chat_created` and `idx_messages_chat_user`
 
-No formal migration system yet — `db.create_all()` runs on startup in dev. Production schema changes are manual (see `migrate_database.py` for the index migration pattern).
+Schema evolution uses **Flask-Migrate** (Alembic). See `migrations/versions/` for revision
+scripts and `DEVELOPMENT.md` → "Database Migrations" for the workflow. `init_db()` runs
+`flask db upgrade` on startup; legacy DBs without an `alembic_version` table are stamped
+to HEAD automatically.
 
 ### OLLAMA integration
 - Each user configures their own OLLAMA host (`UserSettings.ollama_host`)
@@ -167,9 +171,10 @@ No coverage tooling wired in yet — adding `pytest-cov` is tracked in `DEVELOPM
 
 ### Schema changes
 1. Edit `models.py`
-2. In dev, drop DB and let `db.create_all()` recreate
-3. In prod, write a migration script (see `migrate_database.py`) — Flask-Migrate is planned but not installed
-4. Update `database_operations.py` if new fields need accessors
+2. `FLASK_APP=app.py uv run flask db migrate -m "describe change"` — autogenerates a revision
+3. Review the generated file in `migrations/versions/` (autogenerate is not perfect, especially for renames and SQLite ALTERs)
+4. `FLASK_APP=app.py uv run flask db upgrade` to apply
+5. Update `database_operations.py` if new fields need accessors
 
 ### OLLAMA client extensions
 1. Add method to `OllamaClient` in `ollama_client.py`
@@ -185,7 +190,7 @@ No coverage tooling wired in yet — adding `pytest-cov` is tracked in `DEVELOPM
 ## Files to Modify for Common Tasks
 
 - **Auth**: `routes/auth.py`, `forms.py`, `models.py`
-- **Schema**: `models.py`, `database_operations.py`, `migrate_database.py`
+- **Schema**: `models.py`, `database_operations.py`, `migrations/versions/*`
 - **OLLAMA**: `ollama_client.py`, `routes/api.py`, `routes/chat.py`
 - **Frontend**: `templates/*.html`, `static/css/*.css`, `static/js/*.js`
 - **Config**: `config.py`, `.env.example`
@@ -209,7 +214,6 @@ No coverage tooling wired in yet — adding `pytest-cov` is tracked in `DEVELOPM
 - `UserSettings.ollama_host` accepts any URL — SSRF risk (no IP range / scheme whitelist)
 - CSP allows `unsafe-inline` for script/style
 - SQLite not suitable for high-concurrency production
-- No formal schema migration system (Flask-Migrate planned)
 - No user data export yet
 - No chat search
 
