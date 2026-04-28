@@ -10,7 +10,18 @@
       "Bash(git add *)",
       "Bash(git rm *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(make test *)",
+      "Bash(FLASK_APP=app.py uv run flask db init)",
+      "Bash(FLASK_APP=app.py uv run flask db migrate -m \"initial schema\")",
+      "Read(//tmp/**)",
+      "Bash(rm -f migrate_test.db create_all_test.db)",
+      "Bash(FLASK_APP=app.py DATABASE_URL=\"sqlite:////tmp/migrate_test.db\" uv run flask db upgrade)",
+      "Bash(sqlite3 /tmp/migrate_test.db \".schema\")",
+      "Bash(sqlite3 /tmp/create_all_test.db \".schema\")",
+      "Bash(sqlite3 /tmp/legacy.db \"SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version';\")",
+      "Bash(sqlite3 /tmp/legacy.db \"SELECT version_num FROM alembic_version;\")",
+      "Bash(git commit *)"
     ],
     "deny": [],
     "ask": []
